@@ -30,8 +30,9 @@ var runCmd = &cobra.Command{
 	Short: "Execute a command based on a natural language request",
 	Long: `Takes a natural language request, uses an AI provider to translate it into a shell command,
 and executes it after user confirmation.`,
-	Args: cobra.MinimumNArgs(1),
-	RunE: runCommand,
+	Args:         cobra.MinimumNArgs(1),
+	SilenceUsage: true,
+	RunE:         runCommand,
 }
 
 func init() {
@@ -48,6 +49,17 @@ func looksLikeDiagnosticQuestion(s string) bool {
 		strings.Contains(s, "tại sao") || strings.Contains(s, "tai sao") ||
 		strings.Contains(s, "why") || strings.Contains(s, "debug") || strings.Contains(s, "not run") ||
 		strings.Contains(s, "không chạy") || strings.Contains(s, "khong chay")
+}
+
+func tailString(s string, max int) string {
+	s = strings.TrimSpace(s)
+	if max <= 0 {
+		max = 4000
+	}
+	if len(s) <= max {
+		return s
+	}
+	return s[len(s)-max:]
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
@@ -128,25 +140,35 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// 5. Execute the command
 	fmt.Println("🚀 Executing command...")
 	exec := local.NewForOS(runtime.GOOS)
+	shouldSelfHeal := runAgentMode && runSelfHeal && looksLikeDiagnosticQuestion(userRequest)
+
 	var stdoutBuf bytes.Buffer
 	var stderrBuf bytes.Buffer
 	spec := ports.ExecSpec{Command: aiCommand}
-	if runAgentMode && runSelfHeal && looksLikeDiagnosticQuestion(userRequest) {
+	if shouldSelfHeal {
 		spec.Stdout = &stdoutBuf
 		spec.Stderr = &stderrBuf
 	}
 	res, err := exec.Run(ctx, spec)
 	if err != nil {
-		if res.ExitCode > 0 {
-			return fmt.Errorf("command failed with exit code %d", res.ExitCode)
+		if shouldSelfHeal {
+			fmt.Printf("\n❌ Command failed (exit code %d).\n", res.ExitCode)
+			if t := tailString(stderrBuf.String(), 4000); t != "" {
+				fmt.Println("\n--- stderr (tail) ---")
+				fmt.Println(t)
+			}
+		} else {
+			if res.ExitCode > 0 {
+				return fmt.Errorf("command failed with exit code %d", res.ExitCode)
+			}
+			return err
 		}
-		return err
+	} else {
+		fmt.Println("\n✅ Command executed successfully.")
 	}
 
-	fmt.Println("\n✅ Command executed successfully.")
-
 	// Agent self-heal loop: read execution output and keep iterating until the agent can answer.
-	if runAgentMode && runSelfHeal && looksLikeDiagnosticQuestion(userRequest) {
+	if shouldSelfHeal {
 		attempts := runSelfHealMaxAttempts
 		if attempts <= 0 {
 			attempts = 3
@@ -156,16 +178,11 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		if len(agentTranscript) == 0 {
 			agentTranscript = []string{"USER_REQUEST: " + userRequest, "GOOS: " + strings.TrimSpace(runtime.GOOS)}
 		}
-		stdoutTail := strings.TrimSpace(stdoutBuf.String())
-		stderrTail := strings.TrimSpace(stderrBuf.String())
-		if len(stdoutTail) > 4000 {
-			stdoutTail = stdoutTail[len(stdoutTail)-4000:]
-		}
-		if len(stderrTail) > 4000 {
-			stderrTail = stderrTail[len(stderrTail)-4000:]
-		}
+		agentTranscript = append(agentTranscript, "EXEC_COMMAND: "+aiCommand)
+		stdoutTail := tailString(stdoutBuf.String(), 4000)
+		stderrTail := tailString(stderrBuf.String(), 4000)
 		agentTranscript = append(agentTranscript,
-			"EXEC_RESULT: exit_code=0",
+			fmt.Sprintf("EXEC_RESULT: exit_code=%d", res.ExitCode),
 			"EXEC_STDOUT_TAIL: "+stdoutTail,
 			"EXEC_STDERR_TAIL: "+stderrTail,
 			"INSTRUCTION: Based on the execution result above, either answer the user's question (type=answer) or propose the next best command (type=done).",
@@ -211,25 +228,26 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			spec := ports.ExecSpec{Command: resp.Command, Stdout: &stdoutBuf, Stderr: &stderrBuf}
 			res, err := exec.Run(ctx, spec)
 			if err != nil {
+				fmt.Printf("\n❌ Command failed (exit code %d).\n", res.ExitCode)
+				if t := tailString(stderrBuf.String(), 4000); t != "" {
+					fmt.Println("\n--- stderr (tail) ---")
+					fmt.Println(t)
+				}
 				// Feed failure back into transcript and continue.
 				agentTranscript = append(agentTranscript,
+					"EXEC_COMMAND: "+resp.Command,
 					fmt.Sprintf("EXEC_RESULT: exit_code=%d", res.ExitCode),
-					"EXEC_STDOUT_TAIL: "+strings.TrimSpace(stdoutBuf.String()),
-					"EXEC_STDERR_TAIL: "+strings.TrimSpace(stderrBuf.String()),
+					"EXEC_STDOUT_TAIL: "+tailString(stdoutBuf.String(), 4000),
+					"EXEC_STDERR_TAIL: "+tailString(stderrBuf.String(), 4000),
 				)
 				continue
 			}
 
 			fmt.Println("\n✅ Command executed successfully.")
-			stdoutTail := strings.TrimSpace(stdoutBuf.String())
-			stderrTail := strings.TrimSpace(stderrBuf.String())
-			if len(stdoutTail) > 4000 {
-				stdoutTail = stdoutTail[len(stdoutTail)-4000:]
-			}
-			if len(stderrTail) > 4000 {
-				stderrTail = stderrTail[len(stderrTail)-4000:]
-			}
+			stdoutTail := tailString(stdoutBuf.String(), 4000)
+			stderrTail := tailString(stderrBuf.String(), 4000)
 			agentTranscript = append(agentTranscript,
+				"EXEC_COMMAND: "+resp.Command,
 				"EXEC_RESULT: exit_code=0",
 				"EXEC_STDOUT_TAIL: "+stdoutTail,
 				"EXEC_STDERR_TAIL: "+stderrTail,
