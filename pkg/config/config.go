@@ -9,23 +9,28 @@ import (
 
 const (
 	ConfigFileName = ".vibe.yaml"
+	DefaultAPIKeyPlaceholder = "YOUR_GEMINI_API_KEY_HERE"
 )
+
+type GeminiConfig struct {
+	APIKey string `yaml:"apiKey"`
+	Model  string `yaml:"model"`
+}
+
+type AIConfig struct {
+	Provider string       `yaml:"provider"`
+	Gemini   GeminiConfig `yaml:"gemini"`
+}
 
 // Config holds the application's configuration.
 type Config struct {
-	AI struct {
-		Provider string `yaml:"provider"`
-		Gemini   struct {
-			APIKey string `yaml:"apiKey"`
-			Model  string `yaml:"model"`
-		} `yaml:"gemini"`
-	} `yaml:"ai"`
+	AI AIConfig `yaml:"ai"`
 }
 
 // Load loads the configuration from the .vibe.yaml file in the specified directory.
 func Load(dir string) (*Config, error) {
 	configFile := filepath.Join(dir, ConfigFileName)
-	
+
 	data, err := os.ReadFile(configFile)
 	if err != nil {
 		return nil, err
@@ -39,11 +44,23 @@ func Load(dir string) (*Config, error) {
 	return &cfg, nil
 }
 
+// Write writes the configuration to the .vibe.yaml file in the specified directory.
+func Write(dir string, cfg *Config) error {
+	configFile := filepath.Join(dir, ConfigFileName)
+
+	data, err := yaml.Marshal(cfg)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(configFile, data, 0644)
+}
+
 // GetDefaultConfig returns a default configuration object.
 func GetDefaultConfig() *Config {
 	var cfg Config
 	cfg.AI.Provider = "gemini"
-	cfg.AI.Gemini.APIKey = "YOUR_API_KEY_HERE"
+	cfg.AI.Gemini.APIKey = DefaultAPIKeyPlaceholder
 	cfg.AI.Gemini.Model = "gemini-pro"
 	return &cfg
 }

@@ -48,10 +48,14 @@ vibe init .
 
 ### 2. Configure Your API Key
 
-Use the `config` command to set your Gemini API key.
+Use the `config` command to select a provider and set your Gemini API key.
 
 ```bash
-vibe config set gemini.apikey "YOUR_GEMINI_API_KEY"
+# Select provider
+vibe config provider gemini
+
+# Set API key (will validate and prompt you to choose a model)
+vibe config api-key "YOUR_GEMINI_API_KEY"
 ```
 
 ### 3. Run Commands

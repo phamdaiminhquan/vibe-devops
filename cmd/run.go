@@ -37,7 +37,11 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	var provider ai.Provider
 	switch cfg.AI.Provider {
 	case "gemini":
-		provider = ai.NewGeminiProvider(cfg)
+		p, err := ai.NewGeminiProvider(cfg.AI.Gemini)
+		if err != nil {
+			return err
+		}
+		provider = p
 	default:
 		return fmt.Errorf("unsupported AI provider: %s", cfg.AI.Provider)
 	}

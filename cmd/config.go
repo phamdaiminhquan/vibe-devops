@@ -26,8 +26,8 @@ var setProviderCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		providerName := strings.ToLower(args[0])
-		
-		cfg, err := config.LoadConfig(config.DefaultConfigName)
+
+		cfg, err := config.Load(".")
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w. Please run 'vibe init' first", err)
 		}
@@ -37,9 +37,9 @@ var setProviderCmd = &cobra.Command{
 			return fmt.Errorf("unsupported provider: '%s'. Only 'gemini' is currently supported", providerName)
 		}
 
-		cfg.ActiveProvider = providerName
+		cfg.AI.Provider = providerName
 
-		if err := config.WriteConfig(cfg, config.DefaultConfigName); err != nil {
+		if err := config.Write(".", cfg); err != nil {
 			return fmt.Errorf("failed to write updated config: %w", err)
 		}
 
@@ -56,14 +56,14 @@ var setApiKeyCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		apiKey := args[0]
 
-		cfg, err := config.LoadConfig(config.DefaultConfigName)
+		cfg, err := config.Load(".")
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w. Please run 'vibe init' first", err)
 		}
 
-		switch cfg.ActiveProvider {
+		switch cfg.AI.Provider {
 		case "gemini":
-			cfg.Providers.Gemini.APIKey = apiKey
+			cfg.AI.Gemini.APIKey = apiKey
 
 			fmt.Println("🔄 Validating API key and fetching available models...")
 			models, err := ai.GetGeminiModels(apiKey)
@@ -93,18 +93,18 @@ var setApiKeyCmd = &cobra.Command{
 			}
 
 			selectedModel := models[index-1]
-			cfg.Providers.Gemini.Model = strings.TrimPrefix(selectedModel, "models/")
-			fmt.Printf("Selected model: %s\n", cfg.Providers.Gemini.Model)
+			cfg.AI.Gemini.Model = strings.TrimPrefix(selectedModel, "models/")
+			fmt.Printf("Selected model: %s\n", cfg.AI.Gemini.Model)
 
 		default:
-			return fmt.Errorf("no active provider set or provider '%s' is not supported for API key configuration", cfg.ActiveProvider)
+			return fmt.Errorf("no active provider set or provider '%s' is not supported for API key configuration", cfg.AI.Provider)
 		}
 
-		if err := config.WriteConfig(cfg, config.DefaultConfigName); err != nil {
+		if err := config.Write(".", cfg); err != nil {
 			return fmt.Errorf("failed to write updated config: %w", err)
 		}
 
-		fmt.Printf("✅ API key for provider '%s' has been set.\n", cfg.ActiveProvider)
+		fmt.Printf("✅ API key for provider '%s' has been set.\n", cfg.AI.Provider)
 		return nil
 	},
 }
