@@ -7,8 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/configstore/vibeyaml"
+	appConfig "github.com/phamdaiminhquan/vibe-devops/internal/app/config"
 	"github.com/phamdaiminhquan/vibe-devops/pkg/ai"
-	"github.com/phamdaiminhquan/vibe-devops/pkg/config"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +28,8 @@ var setProviderCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		providerName := strings.ToLower(args[0])
 
-		cfg, err := config.Load(".")
+		svc := appConfig.NewService(vibeyaml.New())
+		_, err := svc.Load(".")
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w. Please run 'vibe init' first", err)
 		}
@@ -37,9 +39,7 @@ var setProviderCmd = &cobra.Command{
 			return fmt.Errorf("unsupported provider: '%s'. Only 'gemini' is currently supported", providerName)
 		}
 
-		cfg.AI.Provider = providerName
-
-		if err := config.Write(".", cfg); err != nil {
+		if _, err := svc.SetProvider(".", providerName); err != nil {
 			return fmt.Errorf("failed to write updated config: %w", err)
 		}
 
@@ -56,14 +56,17 @@ var setApiKeyCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		apiKey := args[0]
 
-		cfg, err := config.Load(".")
+		svc := appConfig.NewService(vibeyaml.New())
+		cfg, err := svc.Load(".")
 		if err != nil {
 			return fmt.Errorf("failed to load config: %w. Please run 'vibe init' first", err)
 		}
 
 		switch cfg.AI.Provider {
 		case "gemini":
-			cfg.AI.Gemini.APIKey = apiKey
+			if _, err := svc.SetGeminiAPIKey(".", apiKey); err != nil {
+				return fmt.Errorf("failed to write updated config: %w", err)
+			}
 
 			fmt.Println("🔄 Validating API key and fetching available models...")
 			models, err := ai.GetGeminiModels(apiKey)
@@ -93,15 +96,14 @@ var setApiKeyCmd = &cobra.Command{
 			}
 
 			selectedModel := models[index-1]
-			cfg.AI.Gemini.Model = strings.TrimPrefix(selectedModel, "models/")
-			fmt.Printf("Selected model: %s\n", cfg.AI.Gemini.Model)
+			model := strings.TrimPrefix(selectedModel, "models/")
+			if _, err := svc.SetGeminiModel(".", model); err != nil {
+				return fmt.Errorf("failed to write updated config: %w", err)
+			}
+			fmt.Printf("Selected model: %s\n", model)
 
 		default:
 			return fmt.Errorf("no active provider set or provider '%s' is not supported for API key configuration", cfg.AI.Provider)
-		}
-
-		if err := config.Write(".", cfg); err != nil {
-			return fmt.Errorf("failed to write updated config: %w", err)
 		}
 
 		fmt.Printf("✅ API key for provider '%s' has been set.\n", cfg.AI.Provider)

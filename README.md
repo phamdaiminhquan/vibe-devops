@@ -71,7 +71,8 @@ vibe run "list all running docker containers"
 ```
 $ vibe run "show me the last 5 git commits with their author"
 
-Calling AI to generate command...
+🤖 Calling AI to generate command...
+ℹ️  Note: Currently, Vibe only interprets the command you send without any additional context.
 
 Vibe suggests the following command:
 

@@ -2,13 +2,17 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
+	"log/slog"
 	"os"
-	"os/exec"
 	"runtime"
 	"strings"
 
-	"github.com/phamdaiminhquan/vibe-devops/pkg/ai"
+	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/executor/local"
+	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/provider/gemini"
+	appRun "github.com/phamdaiminhquan/vibe-devops/internal/app/run"
+	"github.com/phamdaiminhquan/vibe-devops/internal/ports"
 	"github.com/phamdaiminhquan/vibe-devops/pkg/config"
 	"github.com/spf13/cobra"
 )
@@ -27,6 +31,8 @@ func init() {
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
+	ctx := context.Background()
+
 	// 1. Load config
 	cfg, err := config.Load(".")
 	if err != nil {
@@ -34,10 +40,10 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// 2. Instantiate AI provider
-	var provider ai.Provider
+	var provider ports.Provider
 	switch cfg.AI.Provider {
 	case "gemini":
-		p, err := ai.NewGeminiProvider(cfg.AI.Gemini)
+		p, err := gemini.New(cfg.AI.Gemini.APIKey, cfg.AI.Gemini.Model)
 		if err != nil {
 			return err
 		}
@@ -45,29 +51,26 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	default:
 		return fmt.Errorf("unsupported AI provider: %s", cfg.AI.Provider)
 	}
+	defer func() { _ = provider.Close() }()
 
-	if !provider.IsConfigured() {
-		return fmt.Errorf("AI provider '%s' is not configured. Please add your credentials to .vibe.yaml", provider.GetName())
+	if err := provider.IsConfigured(ctx); err != nil {
+		return fmt.Errorf("AI provider '%s' is not configured. Please add your credentials to .vibe.yaml", provider.Name())
 	}
 
-	// 3. Get user request and create prompt
+	// 3. Get user request and ask AI for a command suggestion
 	userRequest := strings.Join(args, " ")
-	prompt := buildPrompt(userRequest)
+	runner := appRun.NewService(provider, slog.Default())
 
 	fmt.Println("🤖 Calling AI to generate command...")
-	aiCommand, err := provider.GetCompletion(prompt)
+	fmt.Println("ℹ️  Note: Currently, Vibe only interprets the command you send without any additional context.")
+	aiCommand, err := runner.SuggestCommand(ctx, appRun.SuggestRequest{UserRequest: userRequest, GOOS: runtime.GOOS})
 	if err != nil {
 		return fmt.Errorf("AI completion failed: %w", err)
-	}
-	
-	sanitizedCommand := sanitizeAIResponse(aiCommand)
-	if strings.HasPrefix(sanitizedCommand, "Error:") {
-		return fmt.Errorf("AI returned an error: %s", sanitizedCommand)
 	}
 
 	// 4. Ask for user confirmation
 	fmt.Printf("\n✨ Vibe suggests the following command:\n\n")
-	fmt.Printf("  \033[1;36m%s\033[0m\n\n", sanitizedCommand) // Bold cyan
+	fmt.Printf("  \033[1;36m%s\033[0m\n\n", aiCommand) // Bold cyan
 	fmt.Print("Do you want to execute it? (y/N) ")
 
 	reader := bufio.NewReader(os.Stdin)
@@ -81,48 +84,15 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	// 5. Execute the command
 	fmt.Println("🚀 Executing command...")
-	shell, flag := getShell()
-	execCmd := exec.Command(shell, flag, sanitizedCommand)
-	execCmd.Stdin = os.Stdin
-	execCmd.Stdout = os.Stdout
-	execCmd.Stderr = os.Stderr
-
-	if err := execCmd.Run(); err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return fmt.Errorf("command failed with exit code %d", exitErr.ExitCode())
+	exec := local.NewForOS(runtime.GOOS)
+	res, err := exec.Run(ctx, ports.ExecSpec{Command: aiCommand})
+	if err != nil {
+		if res.ExitCode > 0 {
+			return fmt.Errorf("command failed with exit code %d", res.ExitCode)
 		}
-		return fmt.Errorf("failed to execute command: %w", err)
+		return err
 	}
 
 	fmt.Println("\n✅ Command executed successfully.")
 	return nil
-}
-
-func buildPrompt(userRequest string) string {
-	return fmt.Sprintf(
-		`You are an expert AI assistant specializing in shell commands. Your task is to convert a user's request into a single, executable shell command for a %s environment.
-- Only output the raw command.
-- Do not include any explanation, markdown, backticks, or any text other than the command itself.
-- If the request is ambiguous or unsafe, reply with "Error: Ambiguous or unsafe request."
-
-User's request: "%s"
-Shell command:`,
-		runtime.GOOS,
-		userRequest,
-	)
-}
-
-func sanitizeAIResponse(response string) string {
-	response = strings.TrimSpace(response)
-	response = strings.TrimPrefix(response, "`")
-	response = strings.TrimSuffix(response, "`")
-	response = strings.TrimPrefix(response, "shell")
-	return strings.TrimSpace(response)
-}
-
-func getShell() (string, string) {
-	if runtime.GOOS == "windows" {
-		return "powershell", "-Command"
-	}
-	return "sh", "-c"
 }
