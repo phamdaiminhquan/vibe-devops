@@ -1,153 +1,94 @@
 # vibe-devops
 
-An open-source AI terminal agent for automated VPS management and self-healing Docker deployments.
+An open-source AI terminal agent for automated DevOps tasks.
 
 ## 🚀 Features
 
-- **AI-Powered DevOps**: Leverage AI to automate VPS and Docker management tasks
-- **CLI Interface**: Easy-to-use command-line interface built with Cobra
-- **Extensible**: Modular architecture with pluggable AI providers
-- **Shell Command Execution**: Run shell commands with AI assistance
-
-## 📋 Prerequisites
-
-- Go 1.24 or higher
+- **Natural Language to Shell**: Convert plain English requests into executable shell commands.
+- **AI-Powered**: Uses providers like Gemini to generate commands.
+- **Safety First**: Shows every command for confirmation before execution.
+- **Extensible**: Pluggable AI provider architecture.
+- **Cross-Platform**: Works on Linux, macOS, and Windows.
 
 ## 🛠️ Installation
 
-### Build from Source
+### One-Line Install (Linux & macOS)
+
+You can install `vibe` with a single command. This will download the latest release and place it in `/usr/local/bin`.
+
+**Prerequisites**: `curl` and `jq` must be installed.
 
 ```bash
-git clone https://github.com/phamdaiminhquan/vibe-devops.git
-cd vibe-devops
-go build -o vibe-devops
+curl -sSL https://raw.githubusercontent.com/phamdaiminhquan/vibe-devops/main/install.sh | sh
 ```
 
-### Install
+### Build from Source
+
+If you prefer, you can build from source:
 
 ```bash
-go install github.com/phamdaiminhquan/vibe-devops@latest
+# Clone the repository
+git clone https://github.com/phamdaiminhquan/vibe-devops.git
+cd vibe-devops
+
+# Build the binary
+go build -o vibe
 ```
 
 ## 📖 Usage
 
-### Initialize a Project
+### 1. Initialize Vibe
 
-Scan a directory to initialize vibe-devops configuration:
-
-```bash
-vibe-devops init [directory]
-```
-
-Example:
-```bash
-# Initialize in current directory
-vibe-devops init .
-
-# Initialize in specific directory
-vibe-devops init /path/to/project
-```
-
-### Run Shell Commands
-
-Execute shell commands with AI-powered assistance:
+First, navigate to your project directory and run `vibe init`. This will create a `.vibe.yaml` file.
 
 ```bash
-vibe-devops run [command]
+# Initialize in the current directory
+vibe init .
 ```
 
-Examples:
-```bash
-# Run a simple command
-vibe-devops run ls -la
+### 2. Configure Your API Key
 
-# Run with verbose output
-vibe-devops run -v "docker ps"
-
-# Execute complex commands
-vibe-devops run "echo 'Hello from vibe-devops!'"
-```
-
-### Get Help
+Use the `config` command to set your Gemini API key.
 
 ```bash
-# Show main help
-vibe-devops --help
-
-# Show version
-vibe-devops --version
-
-# Show help for specific command
-vibe-devops init --help
-vibe-devops run --help
+vibe config set gemini.apikey "YOUR_GEMINI_API_KEY"
 ```
 
-## 📁 Project Structure
+### 3. Run Commands
 
-```
-vibe-devops/
-├── cmd/                    # CLI commands
-│   ├── root.go            # Root command setup
-│   ├── init.go            # Init command (directory scanning)
-│   └── run.go             # Run command (shell execution)
-├── pkg/                    # Packages
-│   └── ai/                # AI provider interfaces
-│       ├── provider.go    # AI provider interface definitions
-│       └── mock.go        # Mock provider implementation
-└── main.go                # Application entry point
-```
-
-## 🔧 Development
-
-### Build
+Now you can make requests in natural language. Vibe will generate a shell command, ask for your confirmation, and then execute it.
 
 ```bash
-go build -o vibe-devops
+vibe run "list all running docker containers"
 ```
 
-### Run Tests
+**Example Interaction:**
 
-```bash
-go test ./...
+```
+$ vibe run "show me the last 5 git commits with their author"
+
+🤖 Calling AI to generate command...
+
+✨ Vibe suggests the following command:
+
+  git log -5 --pretty=format:"%h - %an, %ar : %s"
+
+Do you want to execute it? (y/N) y
+
+🚀 Executing command...
+a1b2c3d - John Doe, 2 hours ago : feat: add awesome new feature
+e4f5g6h - Jane Smith, 5 hours ago : fix: resolve bug in user auth
+i7j8k9l - John Doe, 1 day ago : docs: update installation guide
+m1n2o3p - Jane Smith, 2 days ago : refactor: improve database queries
+q4r5s6t - John Doe, 2 days ago : chore: release version 0.1.0
+
+✅ Command executed successfully.
 ```
 
-### Add Dependencies
+## 🤝 Contributing
 
-```bash
-go get <package>
-go mod tidy
-```
-
-## 🤖 AI Provider Interface
-
-The project includes a flexible AI provider interface that allows integration with various AI services:
-
-```go
-type Provider interface {
-    GetCompletion(prompt string) (string, error)
-    GetName() string
-    IsConfigured() bool
-}
-```
-
-### Available Providers
-
-- **Mock Provider**: A simple mock implementation for testing
-
-### Adding New Providers
-
-1. Implement the `Provider` interface in `pkg/ai/`
-2. Add configuration support
-3. Register the provider in your application
+Contributions are welcome! Please read our `CONTRIBUTING.md` file for our core principles and development guidelines.
 
 ## 📝 License
 
 This project is licensed under the terms specified in the LICENSE file.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📧 Contact
-
-For questions or feedback, please open an issue on GitHub.

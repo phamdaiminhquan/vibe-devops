@@ -1,0 +1,39 @@
+# .github/workflows/release.yml
+name: GoReleaser
+
+on:
+  push:
+    tags:
+      - 'v*' # Triggers the workflow on version tags like v0.1.0
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # This is required for GoReleaser to be able to created a new commit
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.21' # Match this with your project's Go version
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v5
+        with:
+          # 'goreleaser release' will run by default
+          # The 'args' option can be used to pass custom arguments
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GoReleaser will need a GITHUB_TOKEN to create a release.
+          # It is recommended to use a Personal Access Token with the 'repo' scope.
+          # However, the default GITHUB_TOKEN should work for public repositories.

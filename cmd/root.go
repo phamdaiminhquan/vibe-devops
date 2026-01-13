@@ -8,9 +8,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "vibe-devops",
+	Use:   "vibe",
 	Short: "An Open Source AI Agent for DevOps",
-	Long: `vibe-devops is an open-source AI terminal agent for automated VPS management 
+	Long: `vibe is an open-source AI terminal agent for automated VPS management 
 and self-healing Docker deployments. It helps with VPS and Docker automation.`,
 	Version: "0.1.0",
 }
@@ -25,5 +25,5 @@ func Execute() {
 
 func init() {
 	// Add global flags here if needed
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.vibe-devops.yaml)")
+	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.vibe.yaml)")
 }

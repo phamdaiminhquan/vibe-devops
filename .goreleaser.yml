@@ -1,0 +1,85 @@
+# .goreleaser.yml
+# For more information see: https://goreleaser.com/customization/
+project_name: vibe
+
+# Builds configuration
+builds:
+  - id: vibe
+    # The main Go file to build.
+    main: ./main.go
+    # Binary name.
+    binary: vibe
+    # GOOS and GOARCH to build for.
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    # GOARM to build for when GOARCH is arm.
+    goarm:
+      - "7"
+    # Environment variables to use during the build.
+    env:
+      - CGO_ENABLED=0
+    # ldflags to use during the build.
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+
+# Archives configuration
+archives:
+  - id: vibe
+    # The builds to archive.
+    builds:
+      - vibe
+    # Archive format.
+    # tar.gz for Linux and Darwin, zip for Windows.
+    format_overrides:
+      - goos: windows
+        format: zip
+    # Files to include in the archive.
+    files:
+      - LICENSE
+      - README.md
+      - CONTRIBUTING.md
+
+# Checksum configuration
+checksum:
+  # The name of the checksum file.
+  name_template: '{{.ProjectName}}_{{.Version}}_checksums.txt'
+
+# Snapshot configuration
+snapshot:
+  # The name of the snapshot.
+  name_template: "{{ incpatch .Version }}-next"
+
+# Changelog configuration
+changelog:
+  # Sorts the changelog by the commit's author date.
+  sort: asc
+  # Filters out commit messages that match the given regular expressions.
+  filters:
+    - action: "exclude"
+      regexp:
+        - "^docs:"
+        - "^test:"
+        - "^chore:"
+        - "merge"
+
+# Release configuration
+release:
+  # If set to true, GoReleaser will not automatically publish the release.
+  draft: false
+  # If set to true, GoReleaser will not create a GitHub release.
+  # Useful for testing.
+  disable: false
+  # You can add a header to the release notes.
+  header: |
+    ## Vibe Release
+
+  # You can add a footer to the release notes.
+  footer: |
+    ---
+    **Thanks for using Vibe!**
+    Find more information at our [GitHub repository](https://github.com/phamdaiminhquan/vibe-devops).
