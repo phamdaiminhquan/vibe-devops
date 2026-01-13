@@ -21,7 +21,7 @@ func (m *MockProvider) GetCompletion(prompt string) (string, error) {
 	if !m.configured {
 		return "", fmt.Errorf("provider not configured")
 	}
-	
+
 	// Return a simple mock response
 	return fmt.Sprintf("Mock AI response to: %s", prompt), nil
 }

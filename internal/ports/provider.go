@@ -18,7 +18,7 @@ type Provider interface {
 type GenerateRequest struct {
 	// Prompt is the raw text prompt for providers that are prompt-based.
 	// For chat-based usage, Messages can be used instead.
-	Prompt string
+	Prompt   string
 	Messages []chat.Message
 }
 

@@ -11,11 +11,16 @@ import (
 
 	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/executor/local"
 	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/provider/gemini"
+	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/tools/fs"
+	appAgent "github.com/phamdaiminhquan/vibe-devops/internal/app/agent"
 	appRun "github.com/phamdaiminhquan/vibe-devops/internal/app/run"
 	"github.com/phamdaiminhquan/vibe-devops/internal/ports"
 	"github.com/phamdaiminhquan/vibe-devops/pkg/config"
 	"github.com/spf13/cobra"
 )
+
+var runAgentMode bool
+var runAgentMaxSteps int
 
 var runCmd = &cobra.Command{
 	Use:   "run [natural language request]",
@@ -28,6 +33,8 @@ and executes it after user confirmation.`,
 
 func init() {
 	rootCmd.AddCommand(runCmd)
+	runCmd.Flags().BoolVar(&runAgentMode, "agent", false, "Enable agent mode (model can request safe tools like reading files before proposing a command)")
+	runCmd.Flags().IntVar(&runAgentMaxSteps, "agent-max-steps", 5, "Max tool steps in agent mode")
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
@@ -59,13 +66,34 @@ func runCommand(cmd *cobra.Command, args []string) error {
 
 	// 3. Get user request and ask AI for a command suggestion
 	userRequest := strings.Join(args, " ")
-	runner := appRun.NewService(provider, slog.Default())
 
-	fmt.Println("🤖 Calling AI to generate command...")
-	fmt.Println("ℹ️  Note: Currently, Vibe only interprets the command you send without any additional context.")
-	aiCommand, err := runner.SuggestCommand(ctx, appRun.SuggestRequest{UserRequest: userRequest, GOOS: runtime.GOOS})
-	if err != nil {
-		return fmt.Errorf("AI completion failed: %w", err)
+	var aiCommand string
+	if runAgentMode {
+		fmt.Println("🤖 Calling AI (agent mode)...")
+		tools := []ports.Tool{
+			fs.NewListDirTool("."),
+			fs.NewReadFileTool("."),
+			fs.NewGrepTool("."),
+		}
+		agent := appAgent.NewService(provider, tools, slog.Default(), runAgentMaxSteps)
+		resp, err := agent.SuggestCommand(ctx, appAgent.SuggestRequest{UserRequest: userRequest, GOOS: runtime.GOOS})
+		if err != nil {
+			return fmt.Errorf("AI completion failed: %w", err)
+		}
+		aiCommand = resp.Command
+		if strings.TrimSpace(resp.Explanation) != "" {
+			fmt.Println("\n🧾 Explanation:")
+			fmt.Println(resp.Explanation)
+		}
+	} else {
+		runner := appRun.NewService(provider, slog.Default())
+		fmt.Println("🤖 Calling AI to generate command...")
+		fmt.Println("ℹ️  Note: Currently, Vibe only interprets the command you send without any additional context.")
+		cmd, err := runner.SuggestCommand(ctx, appRun.SuggestRequest{UserRequest: userRequest, GOOS: runtime.GOOS})
+		if err != nil {
+			return fmt.Errorf("AI completion failed: %w", err)
+		}
+		aiCommand = cmd
 	}
 
 	// 4. Ask for user confirmation

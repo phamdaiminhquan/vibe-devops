@@ -66,6 +66,12 @@ Now you can make requests in natural language. Vibe will generate a shell comman
 vibe run "list all running docker containers"
 ```
 
+If you want Vibe to gather a bit of workspace context (read-only) before proposing a command, enable agent mode:
+
+```bash
+vibe run --agent "explain this repo structure and suggest the right go test command"
+```
+
 **Example Interaction:**
 
 ```

@@ -1,40 +1,41 @@
 # Copilot instructions for vibe-devops
 
-## Big picture
-- `main.go` boots the CLI and injects build metadata (version/commit/date) into Cobra.
-- `cmd/` contains Cobra commands only (argument parsing, prompts, printing, wiring).
-- `pkg/` contains reusable logic:
-  - `pkg/ai/` implements the provider pattern (`Provider` interface in `pkg/ai/provider.go`).
-  - `pkg/config/` owns the on-disk config format and IO for `.vibe.yaml`.
+## Big picture (where logic lives)
+- `main.go` is the entrypoint; it injects build metadata into Cobra via `cmd.SetVersionInfo(...)`.
+- `cmd/` is the CLI composition root (Cobra): argument parsing, prompts/printing, wiring.
+- `internal/` is the Clean/Hex core:
+  - `internal/domain/` small stable types (chat messages, command suggestion).
+  - `internal/ports/` interfaces (outbound ports like `Provider`, `Executor`, `Tool`, `ConfigStore`).
+  - `internal/app/` use-cases (`run`, `config`, `agent`).
+  - `internal/adapters/` implementations (Gemini provider, local executor, vibeyaml config store, filesystem tools).
+- `pkg/config/` owns the on-disk `.vibe.yaml` schema + IO (this is the “source of truth” for config format).
+- `pkg/ai/` is mostly legacy/provider utilities; it is still used for Gemini model listing (`ai.GetGeminiModels`).
 
 ## Key flows
-- **Run flow**: `cmd/run.go` loads `.vibe.yaml` via `config.Load(".")`, selects a provider by name, builds a prompt for the current OS, shows the generated command, then executes it only after confirmation.
-- **Config flow**: `cmd/config.go` updates `.vibe.yaml` in-place using `config.Write(".", cfg)` and (for Gemini) validates the API key by calling `ai.GetGeminiModels` and prompting the user to pick a model.
+- **Run flow**: `cmd/run.go` loads `.vibe.yaml`, instantiates a provider, then:
+  - default mode → `internal/app/run.Service.SuggestCommand` (single prompt → single command)
+  - agent mode (`--agent`) → `internal/app/agent.Service` (tool loop → final command + explanation)
+  - always prompts for confirmation before execution, then runs via `internal/adapters/executor/local`.
+- **Config flow**: `cmd/config.go` uses `internal/app/config.Service` + `internal/adapters/configstore/vibeyaml` to mutate `.vibe.yaml`; for Gemini it validates key + prompts a model using `pkg/ai.GetGeminiModels`.
+
+## Agent mode protocol (important)
+- Agent mode is opt-in: `vibe run --agent --agent-max-steps 5 "..."` (see `cmd/run.go`).
+- The model must output EXACTLY one JSON object per step (see `internal/app/agent/protocol.go`):
+  - tool call: `{ "type": "tool", "tool": "read_file", "input": { ... } }`
+  - final: `{ "type": "done", "command": "...", "explanation": "..." }`
+- Tools are read-only by contract (`internal/ports/tool.go`); examples: `internal/adapters/tools/fs/*`.
 
 ## Configuration format
-- Config file name is `.vibe.yaml` (see `pkg/config/config.go`).
-- Current schema:
-  - `ai.provider`: provider string (currently `gemini`)
+- File name: `.vibe.yaml` (see `pkg/config/config.go`). Schema:
+  - `ai.provider` (currently `gemini`)
   - `ai.gemini.apiKey`, `ai.gemini.model`
-- Default placeholder key is `YOUR_GEMINI_API_KEY_HERE`; treat it as “not configured”.
+- Placeholder key `YOUR_GEMINI_API_KEY_HERE` means “not configured”.
 
-## Provider pattern (repo rule)
-- All new AI integrations must implement `Provider` (see `pkg/ai/provider.go`).
-- Add a provider as a new file in `pkg/ai/` (example: `pkg/ai/gemini.go`) and wire selection in `cmd/run.go` based on `cfg.AI.Provider`.
+## Adding a new provider/tool (project-specific pattern)
+- New AI provider: implement `internal/ports.Provider`, add adapter in `internal/adapters/provider/<name>/`, then wire selection in `cmd/run.go` (and `cmd/config.go` if it needs setup/validation).
+- New agent tool: implement `internal/ports.Tool`, keep it deterministic + side-effect free, then register it in `cmd/run.go` under agent mode.
 
 ## Developer workflows
-- Build: `go build ./...`
-- Test: `go test ./...`
-- Local CLI usage: `go run . --help`
-- Release automation:
-  - CI: `.github/workflows/release.yml` runs GoReleaser on tags `v*`.
-  - GoReleaser config: `.goreleaser.yml` builds `linux/windows/darwin` for `amd64/arm64` with `CGO_ENABLED=0` and injects `main.version`, `main.commit`, `main.date`.
-  - Install script: `install.sh` fetches the latest GitHub Release asset for `linux/darwin` and installs to `/usr/local/bin`.
-
-## Conventions worth keeping
-- Prefer small, explicit wiring in `cmd/` and keep provider/config logic in `pkg/` (see `CONTRIBUTING.md` “Commands are for Humans, Logic is for Packages”).
-- When changing `.vibe.yaml` schema, update:
-  - `pkg/config/config.go` (types + defaults)
-  - `cmd/init.go` (generated config)
-  - `cmd/config.go` (mutations/validation)
-  - `README.md` usage snippets
+- Build: `go build ./...`  |  Test: `go test ./...`  |  CLI: `go run . --help`
+- Release: GoReleaser (`.goreleaser.yml`) via `.github/workflows/release.yml` on tags `v*` (injects `main.version`, `main.commit`, `main.date`).
+- When changing `.vibe.yaml` schema, update `pkg/config/config.go`, `cmd/init.go`, `cmd/config.go`, and `README.md`.

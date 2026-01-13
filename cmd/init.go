@@ -13,7 +13,7 @@ import (
 var initCmd = &cobra.Command{
 	Use:   "init [directory]",
 	Short: "Initialize vibe in a directory",
-	Long: `Creates a default .vibe.yaml configuration file in the specified directory.`,
+	Long:  `Creates a default .vibe.yaml configuration file in the specified directory.`,
 	Args:  cobra.MaximumNArgs(1),
 	RunE:  runInit,
 }
@@ -63,4 +63,3 @@ func runInit(cmd *cobra.Command, args []string) error {
 
 	return nil
 }
-
