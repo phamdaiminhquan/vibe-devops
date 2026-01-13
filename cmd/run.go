@@ -35,6 +35,9 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	// Create the command using sh -c to properly handle shell commands
+	// Note: This intentionally executes user-provided commands as-is for DevOps automation.
+	// Users are responsible for the commands they execute. This is the expected behavior
+	// for a DevOps CLI tool that needs to run arbitrary shell commands.
 	shellCmd := exec.Command("sh", "-c", commandStr)
 	
 	// Set up command to use standard input/output/error
