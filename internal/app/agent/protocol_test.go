@@ -50,3 +50,16 @@ func TestParseAction_Tool_DefaultInput(t *testing.T) {
 		t.Fatalf("expected default input {} but got %s", string(a.Input))
 	}
 }
+
+func TestParseAction_Answer(t *testing.T) {
+	a, err := ParseAction(`{"type":"answer","explanation":"it failed because ..."}`)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if a.Type != ActionTypeAnswer {
+		t.Fatalf("expected answer")
+	}
+	if a.Explanation == "" {
+		t.Fatalf("expected explanation")
+	}
+}

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"log/slog"
@@ -21,6 +22,8 @@ import (
 
 var runAgentMode bool
 var runAgentMaxSteps int
+var runSelfHeal bool
+var runSelfHealMaxAttempts int
 
 var runCmd = &cobra.Command{
 	Use:   "run [natural language request]",
@@ -35,6 +38,16 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 	runCmd.Flags().BoolVar(&runAgentMode, "agent", false, "Enable agent mode (model can request safe tools like reading files before proposing a command)")
 	runCmd.Flags().IntVar(&runAgentMaxSteps, "agent-max-steps", 5, "Max tool steps in agent mode")
+	runCmd.Flags().BoolVar(&runSelfHeal, "self-heal", true, "In agent mode, keep iterating after execution by reading command output and proposing next steps until an answer is reached")
+	runCmd.Flags().IntVar(&runSelfHealMaxAttempts, "self-heal-max-attempts", 3, "Max execution/repair iterations in self-heal loop (agent mode only)")
+}
+
+func looksLikeDiagnosticQuestion(s string) bool {
+	s = strings.ToLower(s)
+	return strings.Contains(s, "giải thích") || strings.Contains(s, "giai thich") ||
+		strings.Contains(s, "tại sao") || strings.Contains(s, "tai sao") ||
+		strings.Contains(s, "why") || strings.Contains(s, "debug") || strings.Contains(s, "not run") ||
+		strings.Contains(s, "không chạy") || strings.Contains(s, "khong chay")
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
@@ -68,6 +81,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	userRequest := strings.Join(args, " ")
 
 	var aiCommand string
+	var agentTranscript []string
 	if runAgentMode {
 		fmt.Println("🤖 Calling AI (agent mode)...")
 		tools := []ports.Tool{
@@ -81,6 +95,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("AI completion failed: %w", err)
 		}
 		aiCommand = resp.Command
+		agentTranscript = resp.Transcript
 		if strings.TrimSpace(resp.Explanation) != "" {
 			fmt.Println("\n🧾 Explanation:")
 			fmt.Println(resp.Explanation)
@@ -113,7 +128,14 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	// 5. Execute the command
 	fmt.Println("🚀 Executing command...")
 	exec := local.NewForOS(runtime.GOOS)
-	res, err := exec.Run(ctx, ports.ExecSpec{Command: aiCommand})
+	var stdoutBuf bytes.Buffer
+	var stderrBuf bytes.Buffer
+	spec := ports.ExecSpec{Command: aiCommand}
+	if runAgentMode && runSelfHeal && looksLikeDiagnosticQuestion(userRequest) {
+		spec.Stdout = &stdoutBuf
+		spec.Stderr = &stderrBuf
+	}
+	res, err := exec.Run(ctx, spec)
 	if err != nil {
 		if res.ExitCode > 0 {
 			return fmt.Errorf("command failed with exit code %d", res.ExitCode)
@@ -122,5 +144,99 @@ func runCommand(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Println("\n✅ Command executed successfully.")
+
+	// Agent self-heal loop: read execution output and keep iterating until the agent can answer.
+	if runAgentMode && runSelfHeal && looksLikeDiagnosticQuestion(userRequest) {
+		attempts := runSelfHealMaxAttempts
+		if attempts <= 0 {
+			attempts = 3
+		}
+
+		// Seed transcript if missing (shouldn't happen in agent mode).
+		if len(agentTranscript) == 0 {
+			agentTranscript = []string{"USER_REQUEST: " + userRequest, "GOOS: " + strings.TrimSpace(runtime.GOOS)}
+		}
+		stdoutTail := strings.TrimSpace(stdoutBuf.String())
+		stderrTail := strings.TrimSpace(stderrBuf.String())
+		if len(stdoutTail) > 4000 {
+			stdoutTail = stdoutTail[len(stdoutTail)-4000:]
+		}
+		if len(stderrTail) > 4000 {
+			stderrTail = stderrTail[len(stderrTail)-4000:]
+		}
+		agentTranscript = append(agentTranscript,
+			"EXEC_RESULT: exit_code=0",
+			"EXEC_STDOUT_TAIL: "+stdoutTail,
+			"EXEC_STDERR_TAIL: "+stderrTail,
+			"INSTRUCTION: Based on the execution result above, either answer the user's question (type=answer) or propose the next best command (type=done).",
+		)
+
+		tools := []ports.Tool{
+			fs.NewListDirTool("."),
+			fs.NewReadFileTool("."),
+			fs.NewGrepTool("."),
+		}
+		agent := appAgent.NewService(provider, tools, slog.Default(), runAgentMaxSteps)
+
+		for i := 0; i < attempts; i++ {
+			resp, err := agent.SuggestCommand(ctx, appAgent.SuggestRequest{UserRequest: userRequest, GOOS: runtime.GOOS, Transcript: agentTranscript})
+			if err != nil {
+				return fmt.Errorf("AI completion failed (self-heal): %w", err)
+			}
+			agentTranscript = resp.Transcript
+
+			if strings.TrimSpace(resp.Explanation) != "" {
+				fmt.Println("\n🧠 Agent analysis:")
+				fmt.Println(resp.Explanation)
+			}
+
+			if strings.TrimSpace(resp.Command) == "" {
+				break
+			}
+
+			fmt.Printf("\n✨ Next suggested command:\n\n")
+			fmt.Printf("  \033[1;36m%s\033[0m\n\n", resp.Command)
+			fmt.Print("Do you want to execute it? (y/N) ")
+
+			reader := bufio.NewReader(os.Stdin)
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(input)
+			if strings.ToLower(input) != "y" {
+				break
+			}
+
+			fmt.Println("🚀 Executing command...")
+			stdoutBuf.Reset()
+			stderrBuf.Reset()
+			spec := ports.ExecSpec{Command: resp.Command, Stdout: &stdoutBuf, Stderr: &stderrBuf}
+			res, err := exec.Run(ctx, spec)
+			if err != nil {
+				// Feed failure back into transcript and continue.
+				agentTranscript = append(agentTranscript,
+					fmt.Sprintf("EXEC_RESULT: exit_code=%d", res.ExitCode),
+					"EXEC_STDOUT_TAIL: "+strings.TrimSpace(stdoutBuf.String()),
+					"EXEC_STDERR_TAIL: "+strings.TrimSpace(stderrBuf.String()),
+				)
+				continue
+			}
+
+			fmt.Println("\n✅ Command executed successfully.")
+			stdoutTail := strings.TrimSpace(stdoutBuf.String())
+			stderrTail := strings.TrimSpace(stderrBuf.String())
+			if len(stdoutTail) > 4000 {
+				stdoutTail = stdoutTail[len(stdoutTail)-4000:]
+			}
+			if len(stderrTail) > 4000 {
+				stderrTail = stderrTail[len(stderrTail)-4000:]
+			}
+			agentTranscript = append(agentTranscript,
+				"EXEC_RESULT: exit_code=0",
+				"EXEC_STDOUT_TAIL: "+stdoutTail,
+				"EXEC_STDERR_TAIL: "+stderrTail,
+				"INSTRUCTION: Continue until you can answer (type=answer) or stop if no more steps.",
+			)
+		}
+	}
+
 	return nil
 }

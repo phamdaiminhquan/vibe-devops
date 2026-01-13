@@ -8,8 +8,9 @@ import (
 )
 
 const (
-	ActionTypeTool = "tool"
-	ActionTypeDone = "done"
+	ActionTypeTool   = "tool"
+	ActionTypeDone   = "done"
+	ActionTypeAnswer = "answer"
 )
 
 type Action struct {
@@ -49,6 +50,10 @@ func ParseAction(modelText string) (Action, error) {
 	case ActionTypeDone:
 		if strings.TrimSpace(a.Command) == "" {
 			return Action{}, fmt.Errorf("missing field: command")
+		}
+	case ActionTypeAnswer:
+		if strings.TrimSpace(a.Explanation) == "" {
+			return Action{}, fmt.Errorf("missing field: explanation")
 		}
 	default:
 		return Action{}, fmt.Errorf("unknown type: %s", a.Type)

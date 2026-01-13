@@ -72,6 +72,12 @@ If you want Vibe to gather a bit of workspace context (read-only) before proposi
 vibe run --agent "explain this repo structure and suggest the right go test command"
 ```
 
+For troubleshooting-style questions, you can enable a self-heal loop so Vibe can read command output and continue iterating until it can explain the root cause:
+
+```bash
+vibe run --agent --self-heal "explain why service X is not running"
+```
+
 **Example Interaction:**
 
 ```

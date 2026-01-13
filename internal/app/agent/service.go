@@ -29,12 +29,16 @@ func NewService(provider ports.Provider, tools []ports.Tool, logger *slog.Logger
 type SuggestRequest struct {
 	UserRequest string
 	GOOS        string
+	// Transcript allows continuing an ongoing agent run (e.g., after executing a proposed command).
+	// If empty, the service will start a new transcript.
+	Transcript []string
 }
 
 type SuggestResponse struct {
 	Command     string
 	Explanation string
 	StepsUsed   int
+	Transcript  []string
 }
 
 func (s *Service) SuggestCommand(ctx context.Context, req SuggestRequest) (SuggestResponse, error) {
@@ -50,9 +54,14 @@ func (s *Service) SuggestCommand(ctx context.Context, req SuggestRequest) (Sugge
 		toolsByName[t.Name()] = t
 	}
 
-	transcript := []string{
-		"USER_REQUEST: " + req.UserRequest,
-		"GOOS: " + strings.TrimSpace(req.GOOS),
+	transcript := make([]string, 0, 32)
+	if len(req.Transcript) > 0 {
+		transcript = append(transcript, req.Transcript...)
+	} else {
+		transcript = append(transcript,
+			"USER_REQUEST: "+req.UserRequest,
+			"GOOS: "+strings.TrimSpace(req.GOOS),
+		)
 	}
 
 	for step := 0; step < s.maxSteps; step++ {
@@ -75,7 +84,10 @@ func (s *Service) SuggestCommand(ctx context.Context, req SuggestRequest) (Sugge
 			if cmd == "" {
 				return SuggestResponse{}, fmt.Errorf("agent returned empty command")
 			}
-			return SuggestResponse{Command: cmd, Explanation: strings.TrimSpace(action.Explanation), StepsUsed: step}, nil
+			return SuggestResponse{Command: cmd, Explanation: strings.TrimSpace(action.Explanation), StepsUsed: step, Transcript: transcript}, nil
+
+		case ActionTypeAnswer:
+			return SuggestResponse{Command: "", Explanation: strings.TrimSpace(action.Explanation), StepsUsed: step, Transcript: transcript}, nil
 
 		case ActionTypeTool:
 			toolName := strings.TrimSpace(action.Tool)
