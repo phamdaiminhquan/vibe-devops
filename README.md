@@ -16,7 +16,7 @@ An open-source AI terminal agent for automated DevOps tasks.
 
 You can install `vibe` with a single command. This will download the latest release and place it in `/usr/local/bin`.
 
-**Prerequisites**: `curl` and `jq` must be installed.
+**Prerequisites**: `curl` must be installed.
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/phamdaiminhquan/vibe-devops/main/install.sh | sh

@@ -37,10 +37,6 @@ if ! command_exists curl; then
     print_error "curl is not installed. Please install it first."
 fi
 
-if ! command_exists jq; then
-    print_error "jq is not installed. Please install it first."
-fi
-
 
 # --- Platform Detection ---
 get_os() {
@@ -69,8 +65,13 @@ main() {
     print_info "Fetching latest release from GitHub..."
     LATEST_RELEASE_URL="https://api.github.com/repos/${REPO}/releases/latest"
     
-    DOWNLOAD_URL=$(curl -sSL "$LATEST_RELEASE_URL" | jq -r \
-        ".assets[] | select(.name | test(\"${OS}_${ARCH}\")) | .browser_download_url")
+    if command_exists jq; then
+        DOWNLOAD_URL=$(curl -sSL "$LATEST_RELEASE_URL" | jq -r \
+            ".assets[] | select(.name | test(\"${OS}_${ARCH}\")) | .browser_download_url")
+    else
+        # Fallback to grep/cut if jq is not available
+        DOWNLOAD_URL=$(curl -sSL "$LATEST_RELEASE_URL" | grep "browser_download_url" | grep "${OS}_${ARCH}" | cut -d '"' -f 4 | head -n 1)
+    fi
 
     if [ -z "$DOWNLOAD_URL" ]; then
         print_error "Could not find a download for your platform (${OS}/${ARCH})."
