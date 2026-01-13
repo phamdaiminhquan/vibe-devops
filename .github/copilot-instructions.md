@@ -13,17 +13,27 @@
 
 ## Key flows
 - **Run flow**: `cmd/run.go` loads `.vibe.yaml`, instantiates a provider, then:
-  - default mode → `internal/app/run.Service.SuggestCommand` (single prompt → single command)
-  - agent mode (`--agent`) → `internal/app/agent.Service` (tool loop → final command + explanation)
+  - default mode → `internal/app/agent.Service` (tool loop → final command + explanation)
+  - simple mode (`--agent=false`) → `internal/app/run.Service.SuggestCommand` (single prompt → single command)
   - always prompts for confirmation before execution, then runs via `internal/adapters/executor/local`.
+
+- Convenience: `vibe "..."` is treated as `vibe run "..."` (see `cmd/root.go`).
 - **Config flow**: `cmd/config.go` uses `internal/app/config.Service` + `internal/adapters/configstore/vibeyaml` to mutate `.vibe.yaml`; for Gemini it validates key + prompts a model using `pkg/ai.GetGeminiModels`.
 
 ## Agent mode protocol (important)
-- Agent mode is opt-in: `vibe run --agent --agent-max-steps 5 "..."` (see `cmd/run.go`).
+- Agent mode is the default for `vibe run` (see `cmd/run.go`). Disable with `--agent=false`.
 - The model must output EXACTLY one JSON object per step (see `internal/app/agent/protocol.go`):
   - tool call: `{ "type": "tool", "tool": "read_file", "input": { ... } }`
   - final: `{ "type": "done", "command": "...", "explanation": "..." }`
+- For post-execution analysis (self-heal loop), the model can also return:
+  - answer: `{ "type": "answer", "explanation": "..." }`
 - Tools are read-only by contract (`internal/ports/tool.go`); examples: `internal/adapters/tools/fs/*`.
+
+## Session memory (project + global)
+- Agent mode can persist a compact rolling summary + recent tail for context reuse across runs:
+  - Project: `./.vibe/sessions/<name>.json`
+  - Global: `~/.vibe/sessions/<name>.json`
+- Implementation: `internal/app/session` + `internal/adapters/sessionstore/jsonfile`.
 
 ## Configuration format
 - File name: `.vibe.yaml` (see `pkg/config/config.go`). Schema:

@@ -63,19 +63,65 @@ vibe config api-key "YOUR_GEMINI_API_KEY"
 Now you can make requests in natural language. Vibe will generate a shell command, ask for your confirmation, and then execute it.
 
 ```bash
-vibe run "list all running docker containers"
+vibe "list all running docker containers"
 ```
 
-If you want Vibe to gather a bit of workspace context (read-only) before proposing a command, enable agent mode:
+By default, `vibe run` uses **agent mode** (read-only tools like listing/reading files) and **self-heal** (can iterate after execution using the command output when troubleshooting).
+
+To disable agent mode (simple single-shot command suggestion):
 
 ```bash
-vibe run --agent "explain this repo structure and suggest the right go test command"
+vibe --agent=false "list all running docker containers"
 ```
 
-For troubleshooting-style questions, you can enable a self-heal loop so Vibe can read command output and continue iterating until it can explain the root cause:
+For troubleshooting-style questions, self-heal helps Vibe read command output and continue iterating until it can explain the root cause:
 
 ```bash
-vibe run --agent --self-heal "explain why service X is not running"
+vibe "explain why service X is not running"
+```
+
+To disable self-heal:
+
+```bash
+vibe --self-heal=false "explain why service X is not running"
+```
+
+### 4. Switch Models
+
+To switch the configured model later:
+
+```bash
+# Interactive picker
+vibe model
+
+# Or set directly
+vibe model gemini-1.5-pro
+
+# List available models
+vibe model --list
+```
+
+Agent mode can also persist a compact memory across runs (rolling summary + recent context). By default it uses both:
+- project scope: `./.vibe/sessions/<session>.json`
+- global scope: `~/.vibe/sessions/<session>.json`
+
+Useful flags:
+
+```bash
+# Choose a session name (default: "default")
+vibe --session fincap "why is fincap-api not running"
+
+# Control scope: none|project|global|both
+vibe --session-scope both "..."
+
+# Control context size (approx chars + max lines for the recent tail)
+vibe --context-budget 8000 --context-recent-lines 40 "..."
+
+# Disable reading previous memory but still write updates
+vibe --resume=false "..."
+
+# Disable persistence entirely
+vibe --no-session "..."
 ```
 
 **Example Interaction:**

@@ -59,7 +59,8 @@ func runInit(cmd *cobra.Command, args []string) error {
 	fmt.Println("\nNext steps:")
 	fmt.Println("  1. Run 'vibe config provider gemini' to select the provider.")
 	fmt.Println("  2. Run 'vibe config api-key \"<your_api_key>\"' to set your API key and pick a model.")
-	fmt.Println("  3. Run 'vibe run \"<your request>\"' to start using the agent.")
+	fmt.Println("  3. Run 'vibe model' anytime to switch models.")
+	fmt.Println("  4. Run 'vibe \"<your request>\"' to start using the agent.")
 
 	return nil
 }
