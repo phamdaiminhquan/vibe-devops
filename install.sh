@@ -41,15 +41,15 @@ fi
 # --- Platform Detection ---
 get_os() {
     case "$(uname -s)" in
-        Linux*)  echo "Linux";;
-        Darwin*) echo "Darwin";;
+        Linux*)  echo "linux";;
+        Darwin*) echo "darwin";;
         *)       print_error "Unsupported operating system: $(uname -s)";;
     esac
 }
 
 get_arch() {
     case "$(uname -m)" in
-        x86_64)  echo "x86_64";;
+        x86_64)  echo "amd64";;
         arm64)   echo "arm64";;
         aarch64) echo "arm64";; # aarch64 is common on Linux arm64 systems
         *)       print_error "Unsupported architecture: $(uname -m)";;
@@ -87,7 +87,7 @@ main() {
     curl -L --progress-bar "$DOWNLOAD_URL" -o "${TMP_DIR}/${ARCHIVE_NAME}"
 
     print_info "Unpacking archive..."
-    if [ "${OS}" = "Linux" ] || [ "${OS}" = "Darwin" ]; then
+    if [ "${OS}" = "linux" ] || [ "${OS}" = "darwin" ]; then
         tar -xzf "${TMP_DIR}/${ARCHIVE_NAME}" -C "$TMP_DIR"
     else
         print_error "Unsupported OS for unpacking."
