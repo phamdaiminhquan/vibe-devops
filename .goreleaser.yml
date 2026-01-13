@@ -60,12 +60,11 @@ changelog:
   sort: asc
   # Filters out commit messages that match the given regular expressions.
   filters:
-    - action: "exclude"
-      regexp:
-        - "^docs:"
-        - "^test:"
-        - "^chore:"
-        - "merge"
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "merge"
 
 # Release configuration
 release:
