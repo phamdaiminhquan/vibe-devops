@@ -6,17 +6,35 @@ import (
 
 	"github.com/google/generative-ai-go/genai"
 	"github.com/phamdaiminhquan/vibe-devops/pkg/config"
+	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
 
-// GeminiProvider implements the AI provider interface for Google Gemini.
+// GeminiProvider implements the Provider interface for Google's Gemini models.
 type GeminiProvider struct {
-	Cfg *config.Config
+	client *genai.GenerativeModel
+	cfg    config.GeminiConfig
 }
 
-// NewGeminiProvider creates a new instance of the Gemini provider.
-func NewGeminiProvider(cfg *config.Config) *GeminiProvider {
-	return &GeminiProvider{Cfg: cfg}
+// NewGeminiProvider creates a new instance of the GeminiProvider.
+// It takes a GeminiConfig struct and returns a configured provider.
+func NewGeminiProvider(cfg config.GeminiConfig) (*GeminiProvider, error) {
+	if cfg.APIKey == "" {
+		return nil, fmt.Errorf("gemini API key is not configured")
+	}
+
+	ctx := context.Background()
+	client, err := genai.NewClient(ctx, option.WithAPIKey(cfg.APIKey))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create genai client: %w", err)
+	}
+
+	model := client.GenerativeModel(cfg.Model)
+
+	return &GeminiProvider{
+		client: model,
+		cfg:    cfg,
+	}, nil
 }
 
 // GetName returns the name of the provider.
@@ -24,41 +42,60 @@ func (p *GeminiProvider) GetName() string {
 	return "gemini"
 }
 
-// IsConfigured checks if the provider has the necessary configuration.
-func (p *GeminiProvider) IsConfigured() bool {
-	return p.Cfg.AI.Gemini.APIKey != "" && p.Cfg.AI.Gemini.APIKey != "YOUR_API_KEY_HERE"
-}
-
-// GetCompletion gets a completion from the Gemini API.
+// GetCompletion sends a prompt to the Gemini API and returns the response.
 func (p *GeminiProvider) GetCompletion(prompt string) (string, error) {
-	if !p.IsConfigured() {
-		return "", fmt.Errorf("gemini provider is not configured. Please add your API key to .vibe.yaml")
-	}
-
 	ctx := context.Background()
-	client, err := genai.NewClient(ctx, option.WithAPIKey(p.Cfg.AI.Gemini.APIKey))
+	resp, err := p.client.GenerateContent(ctx, genai.Text(prompt))
 	if err != nil {
-		return "", fmt.Errorf("failed to create a new Gemini client: %w", err)
-	}
-	defer client.Close()
-
-	model := client.GenerativeModel(p.Cfg.AI.Gemini.Model)
-	resp, err := model.GenerateContent(ctx, genai.Text(prompt))
-	if err != nil {
-		return "", fmt.Errorf("failed to generate content: %w", err)
+		return "", fmt.Errorf("failed to get completion from gemini: %w", err)
 	}
 
 	if len(resp.Candidates) == 0 || len(resp.Candidates[0].Content.Parts) == 0 {
-		return "", fmt.Errorf("received an empty response from the API")
+		return "", fmt.Errorf("gemini returned no content")
 	}
 
-	// Concatenate all parts of the response.
-	var result string
-	for _, part := range resp.Candidates[0].Content.Parts {
-		if txt, ok := part.(genai.Text); ok {
-			result += string(txt)
+	// Extract text from the first candidate
+	if txt, ok := resp.Candidates[0].Content.Parts[0].(genai.Text); ok {
+		return string(txt), nil
+	}
+
+	return "", fmt.Errorf("gemini response was not text")
+}
+
+// IsConfigured checks if the provider has the necessary configuration.
+func (p *GeminiProvider) IsConfigured() bool {
+	return p.cfg.APIKey != "" && p.cfg.APIKey != "YOUR_GEMINI_API_KEY_HERE"
+}
+
+// GetGeminiModels returns a list of available Gemini models for the given API key.
+func GetGeminiModels(apiKey string) ([]string, error) {
+	ctx := context.Background()
+	client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create genai client: %w", err)
+	}
+	defer client.Close()
+
+	iter := client.ListModels(ctx)
+	var models []string
+	for {
+		m, err := iter.Next()
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("failed to list models: %w", err)
+		}
+
+		// Check if the model supports generateContent
+		if m.SupportedGenerationMethods != nil {
+			for _, method := range m.SupportedGenerationMethods {
+				if method == "generateContent" {
+					models = append(models, m.Name)
+					break
+				}
+			}
 		}
 	}
-
-	return result, nil
+	return models, nil
 }

@@ -1,89 +1,116 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"os"
-	"path/filepath"
+	"strconv"
 	"strings"
 
+	"github.com/phamdaiminhquan/vibe-devops/pkg/ai"
 	"github.com/phamdaiminhquan/vibe-devops/pkg/config"
 	"github.com/spf13/cobra"
-	"gopkg.in/yaml.v3"
 )
 
+// configCmd represents the config command
 var configCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Manage vibe configuration",
-	Long:  `Set or get configuration values for vibe.`, 
+	Long:  `Manage vibe configuration settings such as the AI provider and API keys.`,
 }
 
-var setCmd = &cobra.Command{
-	Use:   "set <key> <value>",
-	Short: "Set a configuration value (e.g., gemini.apikey)",
-	Long:  `Set a configuration value in the .vibe.yaml file. Currently supported keys: "gemini.apikey".`, 
-	Args:  cobra.ExactArgs(2),
-	RunE:  runSet,
+var setProviderCmd = &cobra.Command{
+	Use:   "provider [name]",
+	Short: "Set the active AI provider",
+	Long:  `Sets the active AI provider (e.g., "gemini").`,
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		providerName := strings.ToLower(args[0])
+		
+		cfg, err := config.LoadConfig(config.DefaultConfigName)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w. Please run 'vibe init' first", err)
+		}
+
+		// For now, we only support gemini, but this is extensible
+		if providerName != "gemini" {
+			return fmt.Errorf("unsupported provider: '%s'. Only 'gemini' is currently supported", providerName)
+		}
+
+		cfg.ActiveProvider = providerName
+
+		if err := config.WriteConfig(cfg, config.DefaultConfigName); err != nil {
+			return fmt.Errorf("failed to write updated config: %w", err)
+		}
+
+		fmt.Printf("✅ Active provider set to '%s'.\n", providerName)
+		return nil
+	},
+}
+
+var setApiKeyCmd = &cobra.Command{
+	Use:   "api-key [key]",
+	Short: "Set the API key for the active provider",
+	Long:  `Sets the API key for the currently configured active AI provider.`,
+	Args:  cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		apiKey := args[0]
+
+		cfg, err := config.LoadConfig(config.DefaultConfigName)
+		if err != nil {
+			return fmt.Errorf("failed to load config: %w. Please run 'vibe init' first", err)
+		}
+
+		switch cfg.ActiveProvider {
+		case "gemini":
+			cfg.Providers.Gemini.APIKey = apiKey
+
+			fmt.Println("🔄 Validating API key and fetching available models...")
+			models, err := ai.GetGeminiModels(apiKey)
+			if err != nil {
+				return fmt.Errorf("failed to validate API key: %w", err)
+			}
+
+			if len(models) == 0 {
+				return fmt.Errorf("no models found for this API key")
+			}
+
+			fmt.Println("✅ API Key is valid.")
+			fmt.Println("Select a model to use:")
+			for i, m := range models {
+				displayName := strings.TrimPrefix(m, "models/")
+				fmt.Printf("[%d] %s\n", i+1, displayName)
+			}
+
+			reader := bufio.NewReader(os.Stdin)
+			fmt.Print("Enter the number of the model: ")
+			input, _ := reader.ReadString('\n')
+			input = strings.TrimSpace(input)
+
+			index, err := strconv.Atoi(input)
+			if err != nil || index < 1 || index > len(models) {
+				return fmt.Errorf("invalid selection")
+			}
+
+			selectedModel := models[index-1]
+			cfg.Providers.Gemini.Model = strings.TrimPrefix(selectedModel, "models/")
+			fmt.Printf("Selected model: %s\n", cfg.Providers.Gemini.Model)
+
+		default:
+			return fmt.Errorf("no active provider set or provider '%s' is not supported for API key configuration", cfg.ActiveProvider)
+		}
+
+		if err := config.WriteConfig(cfg, config.DefaultConfigName); err != nil {
+			return fmt.Errorf("failed to write updated config: %w", err)
+		}
+
+		fmt.Printf("✅ API key for provider '%s' has been set.\n", cfg.ActiveProvider)
+		return nil
+	},
 }
 
 func init() {
 	rootCmd.AddCommand(configCmd)
-	configCmd.AddCommand(setCmd)
-}
-
-func runSet(cmd *cobra.Command, args []string) error {
-	key := args[0]
-	value := args[1]
-
-	dir, err := findVibeConfigDir()
-	if err != nil {
-		return err
-	}
-	
-	configFile := filepath.Join(dir, config.ConfigFileName)
-
-	cfg, err := config.Load(dir)
-	if err != nil {
-		return fmt.Errorf("failed to load config file at %s: %w. Please run 'vibe init .' first", dir, err)
-	}
-
-	switch strings.ToLower(key) {
-	case "gemini.apikey":
-		cfg.AI.Gemini.APIKey = value
-	default:
-		return fmt.Errorf("unsupported configuration key: %s. Supported keys: 'gemini.apikey'", key)
-	}
-
-	yamlData, err := yaml.Marshal(cfg)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config to YAML: %w", err)
-	}
-
-	if err := os.WriteFile(configFile, yamlData, 0644); err != nil {
-		return fmt.Errorf("failed to write configuration file: %w", err)
-	}
-
-	fmt.Printf("✅ Successfully updated '%s' in %s\n", key, configFile)
-	return nil
-}
-
-// findVibeConfigDir searches for the .vibe.yaml file in the current directory and parent directories.
-func findVibeConfigDir() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("could not get current directory: %w", err)
-	}
-
-	for {
-		configFile := filepath.Join(dir, config.ConfigFileName)
-		if _, err := os.Stat(configFile); err == nil {
-			return dir, nil
-		}
-
-		parentDir := filepath.Dir(dir)
-		if parentDir == dir {
-			// Reached the root directory
-			return "", fmt.Errorf("could not find a .vibe.yaml file in the current directory or any parent directory. Please run 'vibe init .'")
-		}
-		dir = parentDir
-	}
+	configCmd.AddCommand(setProviderCmd)
+	configCmd.AddCommand(setApiKeyCmd)
 }
