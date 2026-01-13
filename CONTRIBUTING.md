@@ -2,7 +2,7 @@
 
 First off, thank you for considering contributing! This project is an open-source AI terminal agent designed for clarity, extensibility, and ease of contribution. To maintain these goals, we adhere to a few core principles.
 
-## 📜 Core Principles ("Hard Laws")
+## Core Principles ("Hard Laws")
 
 These are the fundamental rules that guide our architecture and development. They ensure that `vibe` remains a high-quality, maintainable, and powerful tool.
 
@@ -33,7 +33,7 @@ Use Go interfaces to define the boundaries between different parts of the applic
 
 - **Why?** Interfaces are the key to extensibility. They allow components to be swapped out and tested in isolation. They are the blueprint for what the application can become.
 
-## 🚀 How to Contribute
+## How to Contribute
 
 1.  **Fork the repository.**
 2.  **Create a new branch** for your feature or bug fix.
