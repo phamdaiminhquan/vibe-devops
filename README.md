@@ -2,7 +2,7 @@
 
 An open-source AI terminal agent for automated DevOps tasks.
 
-## 🚀 Features
+## Features
 
 - **Natural Language to Shell**: Convert plain English requests into executable shell commands.
 - **AI-Powered**: Uses providers like Gemini to generate commands.
@@ -10,7 +10,7 @@ An open-source AI terminal agent for automated DevOps tasks.
 - **Extensible**: Pluggable AI provider architecture.
 - **Cross-Platform**: Works on Linux, macOS, and Windows.
 
-## 🛠️ Installation
+## Installation
 
 ### One-Line Install (Linux & macOS)
 
@@ -35,7 +35,7 @@ cd vibe-devops
 go build -o vibe
 ```
 
-## 📖 Usage
+## Usage
 
 ### 1. Initialize Vibe
 
@@ -67,15 +67,15 @@ vibe run "list all running docker containers"
 ```
 $ vibe run "show me the last 5 git commits with their author"
 
-🤖 Calling AI to generate command...
+Calling AI to generate command...
 
-✨ Vibe suggests the following command:
+Vibe suggests the following command:
 
-  git log -5 --pretty=format:"%h - %an, %ar : %s"
+git log -5 --pretty=format:"%h - %an, %ar : %s"
 
 Do you want to execute it? (y/N) y
 
-🚀 Executing command...
+Executing command...
 a1b2c3d - John Doe, 2 hours ago : feat: add awesome new feature
 e4f5g6h - Jane Smith, 5 hours ago : fix: resolve bug in user auth
 i7j8k9l - John Doe, 1 day ago : docs: update installation guide
@@ -85,10 +85,10 @@ q4r5s6t - John Doe, 2 days ago : chore: release version 0.1.0
 ✅ Command executed successfully.
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please read our `CONTRIBUTING.md` file for our core principles and development guidelines.
 
-## 📝 License
+## License
 
 This project is licensed under the terms specified in the LICENSE file.
