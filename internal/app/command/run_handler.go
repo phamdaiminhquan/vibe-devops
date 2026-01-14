@@ -114,41 +114,70 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 		}
 	}
 
+	// Tool confirmation callback
+	toolConfirm := func(cmd string) bool {
+		fmt.Printf("\n[VIBE] Agent wants to run command:\n")
+		fmt.Printf("   \033[1;33m%s\033[0m\n", cmd)
+		fmt.Print("   Allow this one-time execution? (y/N) ")
+		reader := bufio.NewReader(os.Stdin)
+		in, _ := reader.ReadString('\n')
+		return strings.ToLower(strings.TrimSpace(in)) == "y"
+	}
+
 	tools := []ports.Tool{
 		fs.NewListDirTool("."),
 		fs.NewReadFileTool("."),
 		fs.NewGrepTool("."),
-		system.NewSafeShellTool(),
+		system.NewSafeShellTool(toolConfirm),
 	}
 
 	ag := agent.NewService(h.Ctx.Provider, tools, h.Ctx.Logger, h.Flags.AgentMaxSteps)
-	resp, err := ag.SuggestCommand(ctx, agent.SuggestRequest{
-		UserRequest: input,
-		GOOS:        runtime.GOOS,
-		Transcript:  agentTranscript,
-		OnProgress:  onProgress,
-	})
 
-	// Clear spinner line
-	fmt.Printf("\r\033[K")
+	// Loop to allow extending steps
+	for {
+		resp, err := ag.SuggestCommand(ctx, agent.SuggestRequest{
+			UserRequest: input,
+			GOOS:        runtime.GOOS,
+			Transcript:  agentTranscript,
+			OnProgress:  onProgress,
+		})
 
-	if err != nil {
-		errMsg := err.Error()
-		if strings.Contains(errMsg, "API key not valid") || strings.Contains(errMsg, "API_KEY_INVALID") {
-			fmt.Println("\n❌ Error: Invalid AI Provider API Key.")
-			fmt.Println("👉 To fix this, run:")
-			fmt.Println("   vibe config api-key \"YOUR_API_KEY\"")
-			return fmt.Errorf("check your API key")
+		fmt.Printf("\r\033[K") // Clear spinner
+
+		if err != nil {
+			// Check for max steps error
+			if strings.Contains(err.Error(), "agent exceeded max steps") {
+				fmt.Printf("\n⚠️  [VIBE] Agent stopped after %d steps to avoid infinite loops.\n", h.Flags.AgentMaxSteps)
+				fmt.Printf("   Latest thought: It likely needs more time or is stuck.\n")
+				fmt.Print("   Do you want to give it 10 more steps? (y/N) ")
+
+				reader := bufio.NewReader(os.Stdin)
+				in, _ := reader.ReadString('\n')
+				if strings.ToLower(strings.TrimSpace(in)) == "y" {
+					fmt.Println("🔄 Extending session...")
+					agentTranscript = resp.Transcript // Resume from where we left off
+					continue
+				}
+			}
+
+			// Normal error handling
+			errMsg := err.Error()
+			if strings.Contains(errMsg, "API key not valid") || strings.Contains(errMsg, "API_KEY_INVALID") {
+				fmt.Println("\n❌ Error: Invalid AI Provider API Key.")
+				fmt.Println("👉 To fix this, run:")
+				fmt.Println("   vibe config api-key \"YOUR_API_KEY\"")
+				return fmt.Errorf("check your API key")
+			}
+			return fmt.Errorf("AI completion failed: %w", err)
 		}
-		return fmt.Errorf("AI completion failed: %w", err)
-	}
 
-	if strings.TrimSpace(resp.Explanation) != "" {
-		// New friendly format
-		fmt.Printf("\n[VIBE] %s\n", resp.Explanation)
-	}
+		if strings.TrimSpace(resp.Explanation) != "" {
+			// New friendly format
+			fmt.Printf("\n[VIBE] %s\n", resp.Explanation)
+		}
 
-	return h.executeAndHeal(ctx, resp.Command, resp.Transcript, input)
+		return h.executeAndHeal(ctx, resp.Command, resp.Transcript, input)
+	}
 }
 
 func (h *RunHandler) runSingleShotMode(ctx context.Context, input string) error {

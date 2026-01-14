@@ -2,6 +2,21 @@
 
 ## [Unreleased]
 
+## [v0.3.8] - Interactive Step Extension
+
+**Previous Version:** v0.3.7
+
+### 🧠 UX Improvements
+- **Interactive Timeout Handling**: When the Agent runs out of steps (max 10), Vibe now pauses and asks: "Do you want to give it 10 more steps?". This prevents complex tasks from failing abruptly.
+
+## [v0.3.7] - Interactive Safety & Windows Support
+
+**Previous Version:** v0.3.6
+
+### 🛡️ Interactive Safety
+- **Permission Requests**: Instead of blocking unknown system commands, Vibe now asks: "Agent wants to run UNSAFE command '...'. Allow? (y/N)". This gives you full control without blocking the agent's creativity.
+- **Windows Whitelist**: Added `tasklist`, `Get-Process`, `Get-Service` to the safe list by default.
+
 ## [v0.3.6] - Intelligence & Performance Tuning
 
 **Previous Version:** v0.3.5

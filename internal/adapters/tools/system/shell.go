@@ -15,24 +15,27 @@ type safeShellInput struct {
 
 type SafeShellTool struct {
 	allowedCmds []string
+	OnConfirm   func(string) bool
 }
 
-func NewSafeShellTool() *SafeShellTool {
+func NewSafeShellTool(onConfirm func(string) bool) *SafeShellTool {
 	return &SafeShellTool{
 		allowedCmds: []string{
 			"ps", "netstat", "ss", "curl", "df", "free", "uptime", "id", "whoami", "date",
+			"tasklist", "Get-Process", "Get-Service",
 		},
+		OnConfirm: onConfirm,
 	}
 }
 
 func (t *SafeShellTool) Name() string { return "safe_shell" }
 
 func (t *SafeShellTool) Description() string {
-	return "Execute safe system commands (read-only) to inspect processes, network, and resources. Allowed: ps, netstat, ss, curl, df, free, uptime, id, whoami, date."
+	return "Execute safe system commands. If a command is not whitelisted, the user will be asked for permission."
 }
 
 func (t *SafeShellTool) InputSchema() string {
-	return `{"command":"string (e.g. 'ps aux | grep backend')"}`
+	return `{"command":"string"}`
 }
 
 func (t *SafeShellTool) Run(ctx context.Context, input json.RawMessage) (string, error) {
@@ -47,20 +50,24 @@ func (t *SafeShellTool) Run(ctx context.Context, input json.RawMessage) (string,
 	}
 
 	// Security Check: Validate against allowlist
-	// We check if the command starts with one of the allowed binaries.
-	// NOTE: This is a basic check. Complex chaining might still allow abuse,
-	// but for an Agent tool usage it's a good first layer.
-	// Users run the agent, so they trust the agent somewhat, but we want to prevent accidental destruction.
 	allowed := false
 	for _, allowedCmd := range t.allowedCmds {
-		if strings.HasPrefix(cmdStr, allowedCmd+" ") || cmdStr == allowedCmd {
+		// Case-insensitive check for Windows friendliness
+		if strings.HasPrefix(strings.ToLower(cmdStr), strings.ToLower(allowedCmd)+" ") || strings.EqualFold(cmdStr, allowedCmd) {
 			allowed = true
 			break
 		}
 	}
 
+	// If not allowed by default, ask user
 	if !allowed {
-		return "", fmt.Errorf("command '%s' is not allowed in safe_shell. Allowed: %v", strings.Split(cmdStr, " ")[0], t.allowedCmds)
+		if t.OnConfirm != nil && t.OnConfirm(cmdStr) {
+			allowed = true
+		}
+	}
+
+	if !allowed {
+		return "", fmt.Errorf("command '%s' is not allowed and was rejected by user", cmdStr)
 	}
 
 	// Execution

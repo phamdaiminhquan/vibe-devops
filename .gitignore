@@ -41,3 +41,5 @@ references/
 docs/COMPETITIVE_ANALYSIS.md
 docs/ARCHITECTURE.md
 .vibe.yaml
+.vibe/
+vibe.log

@@ -111,7 +111,7 @@ func (s *Service) SuggestCommand(ctx context.Context, req SuggestRequest) (Sugge
 			if req.OnProgress != nil {
 				msg := fmt.Sprintf("Using tool: %s", action.Tool)
 				if action.Thought != "" {
-					msg = fmt.Sprintf("%s (Tool: %s)", action.Thought, action.Tool)
+					msg = fmt.Sprintf("[%s] %s", action.Tool, action.Thought)
 				}
 				req.OnProgress(StepInfo{Step: step + 1, Type: "tool_call", Message: msg})
 			}
@@ -141,7 +141,10 @@ func (s *Service) SuggestCommand(ctx context.Context, req SuggestRequest) (Sugge
 	}
 
 	s.logger.WarnContext(ctx, "agent max steps exceeded", "max_steps", s.maxSteps)
-	return SuggestResponse{}, fmt.Errorf("agent exceeded max steps (%d) without returning a command", s.maxSteps)
+	return SuggestResponse{
+		StepsUsed:  s.maxSteps,
+		Transcript: transcript,
+	}, fmt.Errorf("agent exceeded max steps (%d) without returning a command", s.maxSteps)
 }
 
 func (s *Service) executeTool(ctx context.Context, action Action, toolsByName map[string]ports.Tool) string {
