@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [v0.3.5] - Actionable Error UX
+
+**Previous Version:** v0.3.4
+
+### 💎 UX Polish
+- **Actionable API Key Error**: Now suggests the exact copy-paste command (`vibe config api-key ...`) to fix invalid credentials instantly.
+
+## [v0.3.4] - Friendly Errors Update
+
+**Previous Version:** v0.3.3
+
+### 🐛 Improvements
+- **Friendly API Key Error**: Vibe now catches 400/401 API errors and proactively suggests checking `.vibe.yaml` instead of dumping a raw stack trace.
+
 ## [v0.3.3] - System Safety Update
 
 **Previous Version:** v0.3.2

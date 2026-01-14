@@ -133,6 +133,13 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 	fmt.Printf("\r\033[K")
 
 	if err != nil {
+		errMsg := err.Error()
+		if strings.Contains(errMsg, "API key not valid") || strings.Contains(errMsg, "API_KEY_INVALID") {
+			fmt.Println("\n❌ Error: Invalid AI Provider API Key.")
+			fmt.Println("👉 To fix this, run:")
+			fmt.Println("   vibe config api-key \"YOUR_API_KEY\"")
+			return fmt.Errorf("check your API key")
+		}
 		return fmt.Errorf("AI completion failed: %w", err)
 	}
 
