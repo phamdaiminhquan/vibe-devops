@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+## [v0.3.6] - Intelligence & Performance Tuning
+
+**Previous Version:** v0.3.5
+
+### 🧠 Agent Intelligence
+- **Increased Step Budget**: Default agent max steps increased from 5 to 10. Complex investigations (e.g., checking processes, ports, and logs together) no longer timeout prematurely.
+- **Efficient Strategy**: Agent is now instructed to "batch" shell commands (e.g., `ps && netstat`) instead of running them one by one, saving step budget.
+
 ## [v0.3.5] - Actionable Error UX
 
 **Previous Version:** v0.3.4

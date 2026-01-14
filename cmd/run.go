@@ -35,7 +35,7 @@ and executes it after user confirmation.`,
 func init() {
 	rootCmd.AddCommand(runCmd)
 	runCmd.Flags().BoolVar(&runAgentMode, "agent", true, "Enable agent mode (default: true). Use --agent=false for simple single-shot mode")
-	runCmd.Flags().IntVar(&runAgentMaxSteps, "agent-max-steps", 5, "Max tool steps in agent mode")
+	runCmd.Flags().IntVar(&runAgentMaxSteps, "agent-max-steps", 10, "Max tool steps in agent mode")
 	runCmd.Flags().BoolVar(&runSelfHeal, "self-heal", true, "In agent mode, keep iterating after execution by reading command output and proposing next steps until an answer is reached (default: true)")
 	runCmd.Flags().IntVar(&runSelfHealMaxAttempts, "self-heal-max-attempts", 3, "Max execution/repair iterations in self-heal loop (agent mode only)")
 

@@ -55,6 +55,7 @@ func buildAgentPrompt(goos, userRequest string, transcript []string, tools []por
 
 	b.WriteString("Reminder: If the task can be solved without tools, return type=done immediately.\n")
 	b.WriteString("If you use tools, keep tool calls minimal and stop once you have enough info.\n")
+	b.WriteString("EFFICIENCY TIP: You can run complex shell commands! Instead of 3 separate calls (e.g. check dir, then ps, then netstat), use ONE safe_shell call with joined commands (e.g. 'ls -F && ps aux | grep app && netstat -tulpn'). Save your steps.\n")
 
 	return b.String()
 }
