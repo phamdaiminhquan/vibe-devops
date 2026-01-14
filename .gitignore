@@ -35,3 +35,8 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Reference projects
+references/
+docs/COMPETITIVE_ANALYSIS.md
+docs/ARCHITECTURE.md

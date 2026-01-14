@@ -6,15 +6,20 @@
 - `internal/` is the Clean/Hex core:
   - `internal/domain/` small stable types (chat messages, command suggestion).
   - `internal/ports/` interfaces (outbound ports like `Provider`, `Executor`, `Tool`, `ConfigStore`).
-  - `internal/app/` use-cases (`run`, `config`, `agent`).
+  - `internal/app/` use-cases:
+    - `bootstrap`: app initialization and wiring (DI container).
+    - `command`: handlers for CLI commands (e.g. `RunHandler`).
+    - `agent`, `run`, `config`, `session`, `dependency`.
   - `internal/adapters/` implementations (Gemini provider, local executor, vibeyaml config store, filesystem tools).
 - `pkg/config/` owns the on-disk `.vibe.yaml` schema + IO (this is the “source of truth” for config format).
 - `pkg/ai/` is mostly legacy/provider utilities; it is still used for Gemini model listing (`ai.GetGeminiModels`).
 
 ## Key flows
-- **Run flow**: `cmd/run.go` loads `.vibe.yaml`, instantiates a provider, then:
-  - default mode → `internal/app/agent.Service` (tool loop → final command + explanation)
-  - simple mode (`--agent=false`) → `internal/app/run.Service.SuggestCommand` (single prompt → single command)
+- **Run flow**: `cmd/run.go` delegates completely to `bootstrap` (init) and `internal/app/command/run_handler.go` (logic):
+  - 1. `bootstrap.Initialize()`: loads config, sets up providers and logger.
+  - 2. `dependency.Manager.VerifyAll()`: checks if Git/Docker are installed.
+  - 3. delegates to `agent.Service` (loop) or `run.Service` (single-shot).
+  - 4. `run_handler` manages the self-heal loop and confirmation UI.
   - always prompts for confirmation before execution, then runs via `internal/adapters/executor/local`.
 
 - Convenience: `vibe "..."` is treated as `vibe run "..."` (see `cmd/root.go`).

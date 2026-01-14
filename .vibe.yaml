@@ -1,0 +1,5 @@
+ai:
+    provider: gemini
+    gemini:
+        apiKey: fake_key_for_test
+        model: gemini-pro

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/phamdaiminhquan/vibe-devops/internal/ports"
 )
@@ -145,6 +146,15 @@ func (s *Service) mergeAndMaybeSummarize(ctx context.Context, st *ports.SessionS
 	if st == nil {
 		st = &ports.SessionState{Version: 1}
 	}
+
+	if st.CreatedAt.IsZero() {
+		st.CreatedAt = time.Now()
+	}
+	if st.Metadata == nil {
+		st.Metadata = make(map[string]string)
+	}
+	st.UpdatedAt = time.Now()
+
 	combined := append([]string{}, st.Recent...)
 	combined = append(combined, newLines...)
 

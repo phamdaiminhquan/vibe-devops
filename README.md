@@ -7,7 +7,9 @@ An open-source AI terminal agent for automated DevOps tasks.
 - **Natural Language to Shell**: Convert plain English requests into executable shell commands.
 - **AI-Powered**: Uses providers like Gemini to generate commands.
 - **Safety First**: Shows every command for confirmation before execution.
-- **Extensible**: Pluggable AI provider architecture.
+- **Smart Session**: Remembers context across runs with metadata (time, status) and simple context management.
+- **Dependency Auto-Check**: Proactively warns if essential tools (Docker, Git) are missing.
+- **Extensible**: Hexagonal Architecture with pluggable AI providers.
 - **Cross-Platform**: Works on Linux, macOS, and Windows.
 
 ## Installation
