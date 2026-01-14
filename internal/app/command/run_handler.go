@@ -10,6 +10,7 @@ import (
 
 	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/executor/local"
 	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/tools/fs"
+	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/tools/system"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/agent"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/bootstrap"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/dependency"
@@ -117,6 +118,7 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 		fs.NewListDirTool("."),
 		fs.NewReadFileTool("."),
 		fs.NewGrepTool("."),
+		system.NewSafeShellTool(),
 	}
 
 	ag := agent.NewService(h.Ctx.Provider, tools, h.Ctx.Logger, h.Flags.AgentMaxSteps)

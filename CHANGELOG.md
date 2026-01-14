@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+## [v0.3.3] - System Safety Update
+
+**Previous Version:** v0.3.2
+
+Introduces `SafeShellTool` to prevent Agent hanging on system checks.
+
+### 🛡️ New Features
+- **Safe Shell Tool**: Vibe Agent can now execute whitelisted system commands (`ps`, `netstat`, `curl`, `df`, `free`, `uptime`, `whoami`) directly.
+- **Improved Performance**: Replaces slow and dangerous `grep` filesystem scans for system status checks. "Check my backend process" is now instant.
+
 ## [v0.3.2] - The "Smart UX" Update
 
 **Previous Version:** v0.3.1
