@@ -1,7 +1,6 @@
 package fs
 
 import (
-	"fmt"
 	"path/filepath"
 	"strings"
 )
@@ -30,15 +29,12 @@ func resolvePath(baseDir, userPath string) (string, error) {
 		return "", err
 	}
 
-	baseWithSep := baseAbs
-	if !strings.HasSuffix(baseWithSep, string(filepath.Separator)) {
-		baseWithSep += string(filepath.Separator)
-	}
+	// Security: For Vibe DevOps, we trust the agent/user to access system files.
+	// We do NOT enforce workspace containment because we need to read /var/log, /etc, etc.
 
-	// Allow exactly baseDir as well.
-	if abs != baseAbs && !strings.HasPrefix(abs, baseWithSep) {
-		return "", fmt.Errorf("path escapes workspace root")
-	}
+	// if abs != baseAbs && !strings.HasPrefix(abs, baseWithSep) {
+	// 	 return "", fmt.Errorf("path escapes workspace root")
+	// }
 
 	return abs, nil
 }

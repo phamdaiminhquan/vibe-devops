@@ -32,6 +32,15 @@ type SuggestRequest struct {
 	// Transcript allows continuing an ongoing agent run (e.g., after executing a proposed command).
 	// If empty, the service will start a new transcript.
 	Transcript []string
+
+	// OnProgress is called when the agent provides intermediate feedback
+	OnProgress func(StepInfo)
+}
+
+type StepInfo struct {
+	Step    int
+	Type    string // "thinking", "tool_call", "tool_output"
+	Message string
 }
 
 type SuggestResponse struct {
@@ -52,6 +61,11 @@ func (s *Service) SuggestCommand(ctx context.Context, req SuggestRequest) (Sugge
 	s.logger.InfoContext(ctx, "agent start", "request", req.UserRequest, "max_steps", s.maxSteps)
 
 	for step := 0; step < s.maxSteps; step++ {
+		// Callback: Thinking
+		if req.OnProgress != nil {
+			req.OnProgress(StepInfo{Step: step + 1, Type: "thinking", Message: "Analyzing request..."})
+		}
+
 		prompt := buildAgentPrompt(req.GOOS, req.UserRequest, transcript, s.tools)
 		s.logger.DebugContext(ctx, "agent generate", "provider", s.provider.Name(), "step", step+1)
 
@@ -93,8 +107,28 @@ func (s *Service) SuggestCommand(ctx context.Context, req SuggestRequest) (Sugge
 			}, nil
 
 		case ActionTypeTool:
+			// Callback: Tool Call
+			if req.OnProgress != nil {
+				msg := fmt.Sprintf("Using tool: %s", action.Tool)
+				if action.Thought != "" {
+					msg = fmt.Sprintf("%s (Tool: %s)", action.Thought, action.Tool)
+				}
+				req.OnProgress(StepInfo{Step: step + 1, Type: "tool_call", Message: msg})
+			}
+
 			// Execute tool and continue loop
 			toolOutput := s.executeTool(ctx, action, toolsByName)
+
+			// Callback: Tool Output
+			if req.OnProgress != nil {
+				// Truncate output for UI if too long
+				displayOut := toolOutput
+				if len(displayOut) > 100 {
+					displayOut = displayOut[:100] + "..."
+				}
+				req.OnProgress(StepInfo{Step: step + 1, Type: "tool_done", Message: "Result: " + displayOut})
+			}
+
 			transcript = append(transcript,
 				fmt.Sprintf("TOOL_CALL: %s %s", action.Tool, strings.TrimSpace(string(action.Input))),
 				fmt.Sprintf("TOOL_OUTPUT: %s", strings.TrimSpace(toolOutput)),

@@ -2,6 +2,20 @@
 
 ## [Unreleased]
 
+## [v0.3.1] - UX Hotfix
+
+**Previous Version:** v0.3.0
+
+Improvements based on initial VPS feedback.
+
+### ✨ UX Improvements
+- **Agent Visibility**: Added `[VIBE] ⏳ Thinking...` status spinner.
+- **Tool Feedback**: Now displaying tool usage action (e.g., `[VIBE] 🛠 Using tool: read_file`).
+- **Friendly Output**: Replaced technical "Explanation:" header with user-friendly `[VIBE]` prefix.
+
+### 🐛 Bug Fixes
+- **FS Restriction**: Relaxed filesystem checks to allow accessing system paths (like `/home`, `/var/log`) instead of restricting to workspace root. This is critical for DevOps tasks.
+
 ## [v0.3.0] - The Foundation Update
 
 **Previous Version:** v0.2.10

@@ -90,7 +90,18 @@ func (h *RunHandler) checkDependencies(ctx context.Context) {
 }
 
 func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
-	fmt.Println("🤖 Calling AI (agent mode)...")
+	// Simple spinner/status
+	onProgress := func(step agent.StepInfo) {
+		switch step.Type {
+		case "thinking":
+			fmt.Printf("\r\033[K[VIBE] ⏳ Thinking... ")
+		case "tool_call":
+			fmt.Printf("\r\033[K[VIBE] 🛠  %s\n", step.Message)
+		case "tool_done":
+			// Optional: print result preview or just keep quiet to let next thinking overwrite
+			// fmt.Printf("\r\033[K[VIBE] ✅ Completed. \n")
+		}
+	}
 
 	var agentTranscript []string
 
@@ -113,14 +124,19 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 		UserRequest: input,
 		GOOS:        runtime.GOOS,
 		Transcript:  agentTranscript,
+		OnProgress:  onProgress,
 	})
+
+	// Clear spinner line
+	fmt.Printf("\r\033[K")
+
 	if err != nil {
 		return fmt.Errorf("AI completion failed: %w", err)
 	}
 
 	if strings.TrimSpace(resp.Explanation) != "" {
-		fmt.Println("\n🧾 Explanation:")
-		fmt.Println(resp.Explanation)
+		// New friendly format
+		fmt.Printf("\n[VIBE] %s\n", resp.Explanation)
 	}
 
 	return h.executeAndHeal(ctx, resp.Command, resp.Transcript, input)

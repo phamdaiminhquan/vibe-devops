@@ -15,6 +15,7 @@ const (
 
 type Action struct {
 	Type        string          `json:"type"`
+	Thought     string          `json:"thought,omitempty"`
 	Tool        string          `json:"tool,omitempty"`
 	Input       json.RawMessage `json:"input,omitempty"`
 	Command     string          `json:"command,omitempty"`
