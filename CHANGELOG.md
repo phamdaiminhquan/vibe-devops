@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+## [v0.3.2] - The "Smart UX" Update
+
+**Previous Version:** v0.3.1
+
+Addresses user feedback on AI ambiguity and repetitive confirmations.
+
+### ✨ UX Improvements
+- **Auto-Execute Safe Commands**: Vibe now automatically runs read-only commands (`ls`, `find`, `grep`, `cat`, `pwd`, `whoami`, `date`) without asking for confirmation. This significantly speeds up investigation workflows.
+- **Smarter AI Prompts**:
+  - AI now asks for clarification if requests are ambiguous (e.g., "What is 'be'?").
+  - AI provides friendlier status thoughts (`[VIBE] Checking folder structure...`).
+
 ## [v0.3.1] - UX Hotfix
 
 **Previous Version:** v0.3.0

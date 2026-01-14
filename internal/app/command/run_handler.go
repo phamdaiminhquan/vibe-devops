@@ -156,9 +156,14 @@ func (h *RunHandler) runSingleShotMode(ctx context.Context, input string) error 
 }
 
 func (h *RunHandler) executeAndHeal(ctx context.Context, cmd string, transcript []string, originalRequest string) error {
-	// Initial Confirmation
-	if !h.askConfirmation(cmd) {
-		return nil
+	// Auto-Confirmation for safe read-only commands
+	if isSafeCommand(cmd) {
+		fmt.Printf("\n✨ Vibe auto-executing safe command:\n  \033[1;36m%s\033[0m\n", cmd)
+	} else {
+		// Ask for confirmation for others
+		if !h.askConfirmation(cmd) {
+			return nil
+		}
 	}
 
 	// Initial Execution
@@ -317,4 +322,25 @@ func tailString(s string, max int) string {
 		return s
 	}
 	return s[len(s)-max:]
+}
+
+func isSafeCommand(cmd string) bool {
+	cmd = strings.TrimSpace(strings.ToLower(cmd))
+	safePrefixes := []string{
+		"ls ", "ls",
+		"find ", "find",
+		"grep ", "grep",
+		"cat ", "cat",
+		"pwd ", "pwd",
+		"echo ", "echo",
+		"stat ", "stat",
+		"whoami",
+		"date",
+	}
+	for _, p := range safePrefixes {
+		if cmd == p || strings.HasPrefix(cmd, p) {
+			return true
+		}
+	}
+	return false
 }
