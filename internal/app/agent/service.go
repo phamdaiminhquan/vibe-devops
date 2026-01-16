@@ -21,7 +21,7 @@ func NewService(provider ports.Provider, tools []ports.Tool, logger *slog.Logger
 		logger = slog.Default()
 	}
 	if maxSteps <= 0 {
-		maxSteps = 5
+		maxSteps = 15
 	}
 	return &Service{provider: provider, tools: tools, logger: logger, maxSteps: maxSteps}
 }
@@ -157,20 +157,30 @@ func (s *Service) executeTool(ctx context.Context, action Action, toolsByName ma
 	}
 
 	s.logger.DebugContext(ctx, "tool execution start", "tool", toolName)
-	out, err := tool.Run(ctx, action.Input)
+
+	// Create tool extras with empty callbacks for now
+	extras := ports.ToolExtras{
+		WorkDir: "",
+	}
+
+	result, err := tool.Run(ctx, action.Input, extras)
 	if err != nil {
 		s.logger.ErrorContext(ctx, "tool execution failed", "tool", toolName, "error", err)
 		return fmt.Sprintf("ERROR: %v", err)
 	}
+	if result.IsError {
+		s.logger.WarnContext(ctx, "tool returned error result", "tool", toolName)
+		return "ERROR: " + result.Content
+	}
 	s.logger.DebugContext(ctx, "tool execution success", "tool", toolName)
-	return out
+	return result.Content
 }
 
 func (s *Service) mapToolsByName() map[string]ports.Tool {
 	m := make(map[string]ports.Tool, len(s.tools))
 	for _, t := range s.tools {
 		if t != nil {
-			m[t.Name()] = t
+			m[t.Definition().Name] = t
 		}
 	}
 	return m

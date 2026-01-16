@@ -29,12 +29,13 @@ func buildAgentPrompt(goos, userRequest string, transcript []string, tools []por
 		if t == nil {
 			continue
 		}
+		def := t.Definition()
 		b.WriteString("- ")
-		b.WriteString(t.Name())
+		b.WriteString(def.Name)
 		b.WriteString(": ")
-		b.WriteString(t.Description())
+		b.WriteString(def.Description)
 		b.WriteString(" Input schema: ")
-		b.WriteString(t.InputSchema())
+		b.WriteString(def.InputSchema)
 		b.WriteString("\n")
 	}
 	if len(tools) == 0 {

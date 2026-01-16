@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/tools/definitions"
 	"github.com/phamdaiminhquan/vibe-devops/internal/ports"
 )
 
@@ -16,25 +17,28 @@ type listDirInput struct {
 	MaxEntries int    `json:"maxEntries"`
 }
 
+// ListDirTool implements the list_dir tool
 type ListDirTool struct {
 	baseDir string
 }
 
+// NewListDirTool creates a new ListDirTool
 func NewListDirTool(baseDir string) *ListDirTool {
 	return &ListDirTool{baseDir: baseDir}
 }
 
-func (t *ListDirTool) Name() string { return "list_dir" }
-
-func (t *ListDirTool) Description() string {
-	return "List entries in a directory (read-only)."
+// Definition returns the tool metadata
+func (t *ListDirTool) Definition() ports.ToolDefinition {
+	return definitions.ListDir
 }
 
-func (t *ListDirTool) InputSchema() string {
-	return `{"path":"string","maxEntries":"int (optional, default 200)"}`
+// EvaluatePolicy always returns allowed for read-only operations
+func (t *ListDirTool) EvaluatePolicy(_ json.RawMessage) ports.ToolPolicy {
+	return ports.PolicyAllowed
 }
 
-func (t *ListDirTool) Run(ctx context.Context, input json.RawMessage) (string, error) {
+// Run executes the list_dir tool
+func (t *ListDirTool) Run(ctx context.Context, input json.RawMessage, extras ports.ToolExtras) (ports.ToolResult, error) {
 	_ = ctx
 
 	var in listDirInput
@@ -50,12 +54,20 @@ func (t *ListDirTool) Run(ctx context.Context, input json.RawMessage) (string, e
 
 	abs, err := resolvePath(t.baseDir, in.Path)
 	if err != nil {
-		return "", err
+		return ports.ToolResult{IsError: true, Content: err.Error()}, err
+	}
+
+	// Stream partial output if callback provided
+	if extras.OnPartialOutput != nil {
+		extras.OnPartialOutput(ports.PartialOutput{
+			Content: fmt.Sprintf("Listing %s...", abs),
+			Status:  "reading",
+		})
 	}
 
 	entries, err := os.ReadDir(abs)
 	if err != nil {
-		return "", err
+		return ports.ToolResult{IsError: true, Content: err.Error()}, err
 	}
 
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
@@ -73,7 +85,10 @@ func (t *ListDirTool) Run(ctx context.Context, input json.RawMessage) (string, e
 		b.WriteString(fmt.Sprintf("- [%s] %s\n", kind, e.Name()))
 	}
 
-	return strings.TrimSpace(b.String()), nil
+	return ports.ToolResult{
+		Content: strings.TrimSpace(b.String()),
+		Status:  "completed",
+	}, nil
 }
 
 var _ ports.Tool = (*ListDirTool)(nil)

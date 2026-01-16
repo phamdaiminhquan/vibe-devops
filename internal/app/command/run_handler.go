@@ -124,11 +124,14 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 		return strings.ToLower(strings.TrimSpace(in)) == "y"
 	}
 
+	// Note: toolConfirm callback is now passed via ToolExtras during agent execution
+	_ = toolConfirm // Callback will be used in future when agent supports OnConfirm
+
 	tools := []ports.Tool{
 		fs.NewListDirTool("."),
 		fs.NewReadFileTool("."),
 		fs.NewGrepTool("."),
-		system.NewSafeShellTool(toolConfirm),
+		system.NewSafeShellTool(),
 	}
 
 	ag := agent.NewService(h.Ctx.Provider, tools, h.Ctx.Logger, h.Flags.AgentMaxSteps)
@@ -147,7 +150,7 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 		if err != nil {
 			// Check for max steps error
 			if strings.Contains(err.Error(), "agent exceeded max steps") {
-				fmt.Printf("\n⚠️  [VIBE] Agent stopped after %d steps to avoid infinite loops.\n", h.Flags.AgentMaxSteps)
+				fmt.Printf("\n[VIBE] Agent stopped after %d steps to avoid infinite loops.\n", h.Flags.AgentMaxSteps)
 				fmt.Printf("   Latest thought: It likely needs more time or is stuck.\n")
 				fmt.Print("   Do you want to give it 10 more steps? (y/N) ")
 

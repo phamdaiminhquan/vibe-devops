@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/tools/definitions"
 	"github.com/phamdaiminhquan/vibe-devops/internal/ports"
 )
 
@@ -18,25 +19,28 @@ type readFileInput struct {
 	MaxBytes  int    `json:"maxBytes"`
 }
 
+// ReadFileTool implements the read_file tool
 type ReadFileTool struct {
 	baseDir string
 }
 
+// NewReadFileTool creates a new ReadFileTool
 func NewReadFileTool(baseDir string) *ReadFileTool {
 	return &ReadFileTool{baseDir: baseDir}
 }
 
-func (t *ReadFileTool) Name() string { return "read_file" }
-
-func (t *ReadFileTool) Description() string {
-	return "Read a text file (read-only), optionally by line range."
+// Definition returns the tool metadata
+func (t *ReadFileTool) Definition() ports.ToolDefinition {
+	return definitions.ReadFile
 }
 
-func (t *ReadFileTool) InputSchema() string {
-	return `{"path":"string","startLine":"int (optional, 1-based)","endLine":"int (optional, inclusive)","maxBytes":"int (optional, default 65536)"}`
+// EvaluatePolicy always returns allowed for read-only operations
+func (t *ReadFileTool) EvaluatePolicy(_ json.RawMessage) ports.ToolPolicy {
+	return ports.PolicyAllowed
 }
 
-func (t *ReadFileTool) Run(ctx context.Context, input json.RawMessage) (string, error) {
+// Run executes the read_file tool
+func (t *ReadFileTool) Run(ctx context.Context, input json.RawMessage, extras ports.ToolExtras) (ports.ToolResult, error) {
 	_ = ctx
 
 	var in readFileInput
@@ -58,12 +62,12 @@ func (t *ReadFileTool) Run(ctx context.Context, input json.RawMessage) (string, 
 
 	abs, err := resolvePath(t.baseDir, in.Path)
 	if err != nil {
-		return "", err
+		return ports.ToolResult{IsError: true, Content: err.Error()}, err
 	}
 
 	f, err := os.Open(abs)
 	if err != nil {
-		return "", err
+		return ports.ToolResult{IsError: true, Content: err.Error()}, err
 	}
 	defer func() { _ = f.Close() }()
 
@@ -82,8 +86,15 @@ func (t *ReadFileTool) Run(ctx context.Context, input json.RawMessage) (string, 
 		end = start + 400
 	}
 
+	// Stream partial output if callback provided
+	if extras.OnPartialOutput != nil {
+		extras.OnPartialOutput(ports.PartialOutput{
+			Content: fmt.Sprintf("Reading %s...", abs),
+			Status:  "reading",
+		})
+	}
+
 	scanner := bufio.NewScanner(f)
-	// Allow moderately long lines.
 	buf := make([]byte, 0, 64*1024)
 	scanner.Buffer(buf, 512*1024)
 
@@ -110,10 +121,13 @@ func (t *ReadFileTool) Run(ctx context.Context, input json.RawMessage) (string, 
 		b.WriteString(chunk)
 	}
 	if err := scanner.Err(); err != nil {
-		return "", err
+		return ports.ToolResult{IsError: true, Content: err.Error()}, err
 	}
 
-	return strings.TrimSpace(b.String()), nil
+	return ports.ToolResult{
+		Content: strings.TrimSpace(b.String()),
+		Status:  "completed",
+	}, nil
 }
 
 var _ ports.Tool = (*ReadFileTool)(nil)

@@ -38,8 +38,9 @@ go.work.sum
 
 # Reference projects
 references/
-docs/COMPETITIVE_ANALYSIS.md
-docs/ARCHITECTURE.md
+.continue/
+.agent/
+docs/
 .vibe.yaml
 .vibe/
 vibe.log

@@ -11,6 +11,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/tools/definitions"
 	"github.com/phamdaiminhquan/vibe-devops/internal/ports"
 )
 
@@ -20,25 +21,28 @@ type grepInput struct {
 	MaxMatches int    `json:"maxMatches"`
 }
 
+// GrepTool implements the grep tool
 type GrepTool struct {
 	baseDir string
 }
 
+// NewGrepTool creates a new GrepTool
 func NewGrepTool(baseDir string) *GrepTool {
 	return &GrepTool{baseDir: baseDir}
 }
 
-func (t *GrepTool) Name() string { return "grep" }
-
-func (t *GrepTool) Description() string {
-	return "Search for a regex pattern in text files under a path (read-only)."
+// Definition returns the tool metadata
+func (t *GrepTool) Definition() ports.ToolDefinition {
+	return definitions.Grep
 }
 
-func (t *GrepTool) InputSchema() string {
-	return `{"pattern":"string (regex)","path":"string (optional, default .)","maxMatches":"int (optional, default 50)"}`
+// EvaluatePolicy always returns allowed for read-only operations
+func (t *GrepTool) EvaluatePolicy(_ json.RawMessage) ports.ToolPolicy {
+	return ports.PolicyAllowed
 }
 
-func (t *GrepTool) Run(ctx context.Context, input json.RawMessage) (string, error) {
+// Run executes the grep tool
+func (t *GrepTool) Run(ctx context.Context, input json.RawMessage, extras ports.ToolExtras) (ports.ToolResult, error) {
 	_ = ctx
 
 	var in grepInput
@@ -46,7 +50,7 @@ func (t *GrepTool) Run(ctx context.Context, input json.RawMessage) (string, erro
 		_ = json.Unmarshal(input, &in)
 	}
 	if strings.TrimSpace(in.Pattern) == "" {
-		return "", fmt.Errorf("pattern is required")
+		return ports.ToolResult{IsError: true, Content: "pattern is required"}, fmt.Errorf("pattern is required")
 	}
 	if in.MaxMatches <= 0 {
 		in.MaxMatches = 50
@@ -57,17 +61,25 @@ func (t *GrepTool) Run(ctx context.Context, input json.RawMessage) (string, erro
 
 	re, err := regexp.Compile(in.Pattern)
 	if err != nil {
-		return "", fmt.Errorf("invalid regex: %w", err)
+		return ports.ToolResult{IsError: true, Content: fmt.Sprintf("invalid regex: %v", err)}, err
 	}
 
 	root, err := resolvePath(t.baseDir, in.Path)
 	if err != nil {
-		return "", err
+		return ports.ToolResult{IsError: true, Content: err.Error()}, err
 	}
 
 	baseAbs, err := filepath.Abs(t.baseDir)
 	if err != nil {
-		return "", err
+		return ports.ToolResult{IsError: true, Content: err.Error()}, err
+	}
+
+	// Stream partial output if callback provided
+	if extras.OnPartialOutput != nil {
+		extras.OnPartialOutput(ports.PartialOutput{
+			Content: fmt.Sprintf("Searching for %q in %s...", in.Pattern, root),
+			Status:  "searching",
+		})
 	}
 
 	matches := 0
@@ -126,13 +138,17 @@ func (t *GrepTool) Run(ctx context.Context, input json.RawMessage) (string, erro
 		return nil
 	})
 	if err != nil && err != io.EOF {
-		return "", err
+		return ports.ToolResult{IsError: true, Content: err.Error()}, err
 	}
 
 	if matches == 0 {
 		b.WriteString("(no matches)\n")
 	}
-	return strings.TrimSpace(b.String()), nil
+
+	return ports.ToolResult{
+		Content: strings.TrimSpace(b.String()),
+		Status:  fmt.Sprintf("found %d matches", matches),
+	}, nil
 }
 
 func bytesContainsNUL(b []byte) bool {

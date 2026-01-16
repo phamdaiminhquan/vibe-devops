@@ -7,67 +7,83 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/tools/definitions"
+	"github.com/phamdaiminhquan/vibe-devops/internal/ports"
 )
 
 type safeShellInput struct {
 	Command string `json:"command"`
 }
 
+// SafeShellTool implements the safe_shell tool
 type SafeShellTool struct {
 	allowedCmds []string
-	OnConfirm   func(string) bool
 }
 
-func NewSafeShellTool(onConfirm func(string) bool) *SafeShellTool {
+// NewSafeShellTool creates a new SafeShellTool
+func NewSafeShellTool() *SafeShellTool {
 	return &SafeShellTool{
 		allowedCmds: []string{
 			"ps", "netstat", "ss", "curl", "df", "free", "uptime", "id", "whoami", "date",
 			"tasklist", "Get-Process", "Get-Service",
 		},
-		OnConfirm: onConfirm,
 	}
 }
 
-func (t *SafeShellTool) Name() string { return "safe_shell" }
-
-func (t *SafeShellTool) Description() string {
-	return "Execute safe system commands. If a command is not whitelisted, the user will be asked for permission."
+// Definition returns the tool metadata
+func (t *SafeShellTool) Definition() ports.ToolDefinition {
+	return definitions.SafeShell
 }
 
-func (t *SafeShellTool) InputSchema() string {
-	return `{"command":"string"}`
-}
-
-func (t *SafeShellTool) Run(ctx context.Context, input json.RawMessage) (string, error) {
+// EvaluatePolicy checks if command is whitelisted
+func (t *SafeShellTool) EvaluatePolicy(input json.RawMessage) ports.ToolPolicy {
 	var in safeShellInput
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("invalid input: %w", err)
+		return ports.PolicyWithPermission
+	}
+
+	cmdStr := strings.TrimSpace(in.Command)
+	for _, allowedCmd := range t.allowedCmds {
+		if strings.HasPrefix(strings.ToLower(cmdStr), strings.ToLower(allowedCmd)+" ") ||
+			strings.EqualFold(cmdStr, allowedCmd) {
+			return ports.PolicyAllowed
+		}
+	}
+	return ports.PolicyWithPermission
+}
+
+// Run executes the safe_shell tool
+func (t *SafeShellTool) Run(ctx context.Context, input json.RawMessage, extras ports.ToolExtras) (ports.ToolResult, error) {
+	var in safeShellInput
+	if err := json.Unmarshal(input, &in); err != nil {
+		return ports.ToolResult{IsError: true, Content: fmt.Sprintf("invalid input: %v", err)}, err
 	}
 
 	cmdStr := strings.TrimSpace(in.Command)
 	if cmdStr == "" {
-		return "", fmt.Errorf("command is required")
+		return ports.ToolResult{IsError: true, Content: "command is required"}, fmt.Errorf("command is required")
 	}
 
-	// Security Check: Validate against allowlist
-	allowed := false
-	for _, allowedCmd := range t.allowedCmds {
-		// Case-insensitive check for Windows friendliness
-		if strings.HasPrefix(strings.ToLower(cmdStr), strings.ToLower(allowedCmd)+" ") || strings.EqualFold(cmdStr, allowedCmd) {
-			allowed = true
-			break
+	// Check policy
+	policy := t.EvaluatePolicy(input)
+	if policy == ports.PolicyWithPermission {
+		// Ask user for confirmation
+		if extras.OnConfirm != nil && !extras.OnConfirm(fmt.Sprintf("Execute command: %s ?", cmdStr)) {
+			return ports.ToolResult{
+				Content: fmt.Sprintf("Command '%s' was rejected by user", cmdStr),
+				Status:  "rejected",
+				IsError: true,
+			}, fmt.Errorf("command rejected by user")
 		}
 	}
 
-	// If not allowed by default, ask user
-	if !allowed {
-		if t.OnConfirm != nil && t.OnConfirm(cmdStr) {
-			allowed = true
-		}
-	}
-
-	if !allowed {
-		return "", fmt.Errorf("command '%s' is not allowed and was rejected by user", cmdStr)
+	// Stream partial output if callback provided
+	if extras.OnPartialOutput != nil {
+		extras.OnPartialOutput(ports.PartialOutput{
+			Content: fmt.Sprintf("Executing: %s", cmdStr),
+			Status:  "executing",
+		})
 	}
 
 	// Execution
@@ -81,13 +97,22 @@ func (t *SafeShellTool) Run(ctx context.Context, input json.RawMessage) (string,
 	out, err := c.CombinedOutput()
 	output := string(out)
 	if err != nil {
-		return fmt.Sprintf("Exit Code: %v\nOutput:\n%s", err, output), nil // Return error as string for Agent to analyze
+		return ports.ToolResult{
+			Content: fmt.Sprintf("Exit Code: %v\nOutput:\n%s", err, output),
+			Status:  "failed",
+			IsError: true,
+		}, nil // Return as result for Agent to analyze
 	}
 
-	// Truncate if too long (processes list can be huge)
+	// Truncate if too long
 	if len(output) > 4000 {
 		output = output[:4000] + "\n...(truncated)"
 	}
 
-	return output, nil
+	return ports.ToolResult{
+		Content: output,
+		Status:  "completed",
+	}, nil
 }
+
+var _ ports.Tool = (*SafeShellTool)(nil)
