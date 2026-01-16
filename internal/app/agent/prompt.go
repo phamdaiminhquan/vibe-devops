@@ -6,7 +6,7 @@ import (
 	"github.com/phamdaiminhquan/vibe-devops/internal/ports"
 )
 
-func buildAgentPrompt(goos, userRequest string, transcript []string, tools []ports.Tool) string {
+func buildAgentPrompt(goos, userRequest string, transcript []string, tools []ports.Tool, contextItems []ports.ContextItem) string {
 	var b strings.Builder
 	b.WriteString("You are Vibe, a CLI assistant that proposes ONE shell command for the user to run.\n")
 	b.WriteString("You MAY request safe read-only tools to inspect the workspace before proposing a command.\n")
@@ -23,6 +23,23 @@ func buildAgentPrompt(goos, userRequest string, transcript []string, tools []por
 	b.WriteString("- GOOS: ")
 	b.WriteString(strings.TrimSpace(goos))
 	b.WriteString("\n\n")
+
+	// Add context items if available
+	if len(contextItems) > 0 {
+		b.WriteString("User-provided Context:\n")
+		for _, item := range contextItems {
+			b.WriteString("--- ")
+			b.WriteString(item.Name)
+			if item.Description != "" {
+				b.WriteString(" (")
+				b.WriteString(item.Description)
+				b.WriteString(")")
+			}
+			b.WriteString(" ---\n")
+			b.WriteString(item.Content)
+			b.WriteString("\n\n")
+		}
+	}
 
 	b.WriteString("Available tools:\n")
 	for _, t := range tools {

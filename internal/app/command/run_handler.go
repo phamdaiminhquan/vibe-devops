@@ -8,6 +8,11 @@ import (
 	"runtime"
 	"strings"
 
+	ctxregistry "github.com/phamdaiminhquan/vibe-devops/internal/adapters/context"
+	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/context/file"
+	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/context/git"
+	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/context/logs"
+	ctxsystem "github.com/phamdaiminhquan/vibe-devops/internal/adapters/context/system"
 	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/executor/local"
 	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/tools/fs"
 	"github.com/phamdaiminhquan/vibe-devops/internal/adapters/tools/system"
@@ -134,7 +139,15 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 		system.NewSafeShellTool(),
 	}
 
-	ag := agent.NewService(h.Ctx.Provider, tools, h.Ctx.Logger, h.Flags.AgentMaxSteps)
+	// Create context provider registry for @mentions
+	contextRegistry := ctxregistry.NewRegistry()
+	contextRegistry.Register(file.NewProvider("."))
+	contextRegistry.Register(git.NewProvider("."))
+	contextRegistry.Register(ctxsystem.NewProvider())
+	contextRegistry.Register(logs.NewProvider("."))
+
+	ag := agent.NewService(h.Ctx.Provider, tools, h.Ctx.Logger, h.Flags.AgentMaxSteps).
+		WithContextRegistry(contextRegistry)
 
 	// Loop to allow extending steps
 	for {

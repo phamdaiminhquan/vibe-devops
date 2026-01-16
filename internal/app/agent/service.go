@@ -10,10 +10,11 @@ import (
 )
 
 type Service struct {
-	provider ports.Provider
-	tools    []ports.Tool
-	logger   *slog.Logger
-	maxSteps int
+	provider        ports.Provider
+	tools           []ports.Tool
+	logger          *slog.Logger
+	maxSteps        int
+	contextRegistry ports.ContextProviderRegistry
 }
 
 func NewService(provider ports.Provider, tools []ports.Tool, logger *slog.Logger, maxSteps int) *Service {
@@ -24,6 +25,12 @@ func NewService(provider ports.Provider, tools []ports.Tool, logger *slog.Logger
 		maxSteps = 15
 	}
 	return &Service{provider: provider, tools: tools, logger: logger, maxSteps: maxSteps}
+}
+
+// WithContextRegistry adds a context provider registry to the service
+func (s *Service) WithContextRegistry(registry ports.ContextProviderRegistry) *Service {
+	s.contextRegistry = registry
+	return s
 }
 
 type SuggestRequest struct {
@@ -58,7 +65,10 @@ func (s *Service) SuggestCommand(ctx context.Context, req SuggestRequest) (Sugge
 	toolsByName := s.mapToolsByName()
 	transcript := s.initializeTranscript(req)
 
-	s.logger.InfoContext(ctx, "agent start", "request", req.UserRequest, "max_steps", s.maxSteps)
+	// Resolve @mentions to context items (only on first step)
+	contextItems := s.resolveContextMentions(ctx, req.UserRequest)
+
+	s.logger.InfoContext(ctx, "agent start", "request", req.UserRequest, "max_steps", s.maxSteps, "context_items", len(contextItems))
 
 	for step := 0; step < s.maxSteps; step++ {
 		// Callback: Thinking
@@ -66,7 +76,7 @@ func (s *Service) SuggestCommand(ctx context.Context, req SuggestRequest) (Sugge
 			req.OnProgress(StepInfo{Step: step + 1, Type: "thinking", Message: "Analyzing request..."})
 		}
 
-		prompt := buildAgentPrompt(req.GOOS, req.UserRequest, transcript, s.tools)
+		prompt := buildAgentPrompt(req.GOOS, req.UserRequest, transcript, s.tools, contextItems)
 		s.logger.DebugContext(ctx, "agent generate", "provider", s.provider.Name(), "step", step+1)
 
 		resp, err := s.provider.Generate(ctx, ports.GenerateRequest{Prompt: prompt})
@@ -197,4 +207,40 @@ func (s *Service) initializeTranscript(req SuggestRequest) []string {
 		)
 	}
 	return transcript
+}
+
+// resolveContextMentions parses @mentions from user input and resolves them to context items
+func (s *Service) resolveContextMentions(ctx context.Context, input string) []ports.ContextItem {
+	if s.contextRegistry == nil {
+		return nil
+	}
+
+	mentions := ParseContextMentions(input)
+	if len(mentions) == 0 {
+		return nil
+	}
+
+	var items []ports.ContextItem
+	for _, m := range mentions {
+		provider, ok := s.contextRegistry.Get(m.Provider)
+		if !ok {
+			s.logger.WarnContext(ctx, "unknown context provider", "provider", m.Provider)
+			continue
+		}
+
+		extras := ports.ContextExtras{
+			WorkDir:   ".",
+			FullInput: input,
+		}
+
+		providerItems, err := provider.GetContextItems(ctx, m.Query, extras)
+		if err != nil {
+			s.logger.WarnContext(ctx, "context provider error", "provider", m.Provider, "query", m.Query, "error", err)
+			continue
+		}
+
+		items = append(items, providerItems...)
+	}
+
+	return items
 }
