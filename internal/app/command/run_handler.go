@@ -96,12 +96,12 @@ func (h *RunHandler) checkDependencies(ctx context.Context) {
 }
 
 func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
-	// Simple spinner/status
+	// Track streaming state for UI
 	var isStreaming bool
 
 	onProgress := func(step agent.StepInfo) {
 		if isStreaming {
-			fmt.Println() // Newline after stream finishes
+			fmt.Println() // Newline after stream
 			isStreaming = false
 		}
 		switch step.Type {
@@ -110,15 +110,14 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 		case "tool_call":
 			fmt.Printf("\r\033[K[VIBE] 🛠  %s\n", step.Message)
 		case "tool_done":
-			// Optional: print result preview or just keep quiet to let next thinking overwrite
-			// fmt.Printf("\r\033[K[VIBE] ✅ Completed. \n")
+			// Keep quiet to let next action overwrite
 		}
 	}
 
+	// Smart streaming: receives only thought/explanation text (not raw JSON)
 	onToken := func(token string) {
 		if !isStreaming {
-			// Clear "Thinking..." line on first token
-			fmt.Printf("\r\033[K")
+			fmt.Printf("\r\033[K") // Clear spinner
 			isStreaming = true
 		}
 		fmt.Print(token)
@@ -208,8 +207,13 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 		}
 
 		if strings.TrimSpace(resp.Explanation) != "" {
-			// New friendly format
+			fmt.Printf("\r\033[K") // Clear spinner
 			fmt.Printf("\n[VIBE] %s\n", resp.Explanation)
+		}
+
+		// Skip command execution if no command suggested (type=answer scenario)
+		if strings.TrimSpace(resp.Command) == "" {
+			return nil
 		}
 
 		return h.executeAndHeal(ctx, resp.Command, resp.Transcript, input)
@@ -379,14 +383,6 @@ func (h *RunHandler) askConfirmation(cmd string) bool {
 }
 
 // Helpers
-
-func looksLikeDiagnosticQuestion(s string) bool {
-	s = strings.ToLower(s)
-	return strings.Contains(s, "giải thích") || strings.Contains(s, "giai thich") ||
-		strings.Contains(s, "tại sao") || strings.Contains(s, "tai sao") ||
-		strings.Contains(s, "why") || strings.Contains(s, "debug") || strings.Contains(s, "not run") ||
-		strings.Contains(s, "không chạy") || strings.Contains(s, "khong chay")
-}
 
 func tailString(s string, max int) string {
 	s = strings.TrimSpace(s)

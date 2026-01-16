@@ -85,21 +85,17 @@ func (s *Service) SuggestCommand(ctx context.Context, req SuggestRequest) (Sugge
 		var responseText string
 
 		if req.OnToken != nil {
-			var sb strings.Builder
-			streamCh, err := s.provider.StreamGenerate(ctx, ports.GenerateRequest{Prompt: prompt})
-			if err != nil {
-				s.logger.ErrorContext(ctx, "agent stream generate failed", "error", err, "step", step+1)
-				return SuggestResponse{}, fmt.Errorf("agent stream generation failed at step %d: %w", step+1, err)
-			}
-
-			for chunk := range streamCh {
-				if chunk.Error != nil {
-					return SuggestResponse{}, fmt.Errorf("stream error: %w", chunk.Error)
+			// Smart streaming: buffer tokens, parse JSON, stream only thought/explanation
+			responseText = s.smartStreamGenerate(ctx, prompt, req.OnToken, step)
+			if responseText == "" {
+				// Fallback to non-streaming if smart stream failed
+				resp, err := s.provider.Generate(ctx, ports.GenerateRequest{Prompt: prompt})
+				if err != nil {
+					s.logger.ErrorContext(ctx, "agent generate failed", "error", err, "step", step+1)
+					return SuggestResponse{}, fmt.Errorf("agent generation failed at step %d: %w", step+1, err)
 				}
-				sb.WriteString(chunk.Content)
-				req.OnToken(chunk.Content)
+				responseText = resp.Text
 			}
-			responseText = sb.String()
 		} else {
 			resp, err := s.provider.Generate(ctx, ports.GenerateRequest{Prompt: prompt})
 			if err != nil {
@@ -267,4 +263,130 @@ func (s *Service) resolveContextMentions(ctx context.Context, input string) []po
 	}
 
 	return items
+}
+
+// smartStreamGenerate buffers streaming tokens, parses JSON, and streams only thought/explanation
+// This provides a clean UX by not showing raw JSON structure to the user
+func (s *Service) smartStreamGenerate(ctx context.Context, prompt string, onToken func(string), step int) string {
+	streamCh, err := s.provider.StreamGenerate(ctx, ports.GenerateRequest{Prompt: prompt})
+	if err != nil {
+		s.logger.ErrorContext(ctx, "smart stream failed", "error", err, "step", step+1)
+		return "" // Signal to use fallback
+	}
+
+	var fullBuffer strings.Builder
+	var lastStreamedLen int
+
+	// Track which fields we're currently inside for streaming
+	inThought := false
+	inExplanation := false
+	thoughtStart := -1
+	explanationStart := -1
+
+	for chunk := range streamCh {
+		if chunk.Error != nil {
+			s.logger.ErrorContext(ctx, "smart stream chunk error", "error", chunk.Error)
+			return "" // Signal to use fallback
+		}
+
+		fullBuffer.WriteString(chunk.Content)
+		currentText := fullBuffer.String()
+
+		// Try to find and stream "thought" content
+		if !inThought && thoughtStart == -1 {
+			if idx := strings.Index(currentText, `"thought":`); idx != -1 {
+				// Find the opening quote after "thought":
+				afterKey := currentText[idx+10:] // len(`"thought":`) = 10
+				if qIdx := strings.Index(afterKey, `"`); qIdx != -1 {
+					thoughtStart = idx + 10 + qIdx + 1
+					inThought = true
+				}
+			}
+		}
+
+		if inThought && thoughtStart != -1 {
+			// Stream thought content as it comes in
+			subset := currentText[thoughtStart:]
+			// Find closing quote (not escaped)
+			endIdx := findUnescapedQuote(subset)
+			if endIdx != -1 {
+				// Thought complete
+				thoughtContent := subset[:endIdx]
+				if len(thoughtContent) > lastStreamedLen {
+					onToken(thoughtContent[lastStreamedLen:])
+				}
+				inThought = false
+				lastStreamedLen = 0
+			} else {
+				// Still streaming thought
+				if len(subset) > lastStreamedLen {
+					onToken(subset[lastStreamedLen:])
+					lastStreamedLen = len(subset)
+				}
+			}
+		}
+
+		// Try to find and stream "explanation" content
+		if !inExplanation && explanationStart == -1 && !inThought {
+			if idx := strings.Index(currentText, `"explanation":`); idx != -1 {
+				afterKey := currentText[idx+14:] // len(`"explanation":`) = 14
+				if qIdx := strings.Index(afterKey, `"`); qIdx != -1 {
+					explanationStart = idx + 14 + qIdx + 1
+					inExplanation = true
+					lastStreamedLen = 0
+					onToken("\n") // Newline before explanation
+				}
+			}
+		}
+
+		if inExplanation && explanationStart != -1 {
+			subset := currentText[explanationStart:]
+			endIdx := findUnescapedQuote(subset)
+			if endIdx != -1 {
+				// Explanation complete
+				explanationContent := subset[:endIdx]
+				if len(explanationContent) > lastStreamedLen {
+					// Unescape the content
+					unescaped := unescapeJSON(explanationContent[lastStreamedLen:])
+					onToken(unescaped)
+				}
+				inExplanation = false
+			} else {
+				// Still streaming explanation
+				if len(subset) > lastStreamedLen {
+					unescaped := unescapeJSON(subset[lastStreamedLen:])
+					onToken(unescaped)
+					lastStreamedLen = len(subset)
+				}
+			}
+		}
+	}
+
+	return fullBuffer.String()
+}
+
+// findUnescapedQuote finds the first unescaped quote in a string
+func findUnescapedQuote(s string) int {
+	for i := 0; i < len(s); i++ {
+		if s[i] == '"' {
+			// Check if escaped
+			backslashes := 0
+			for j := i - 1; j >= 0 && s[j] == '\\'; j-- {
+				backslashes++
+			}
+			if backslashes%2 == 0 {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// unescapeJSON handles common JSON escape sequences
+func unescapeJSON(s string) string {
+	s = strings.ReplaceAll(s, `\n`, "\n")
+	s = strings.ReplaceAll(s, `\t`, "\t")
+	s = strings.ReplaceAll(s, `\"`, `"`)
+	s = strings.ReplaceAll(s, `\\`, `\`)
+	return s
 }

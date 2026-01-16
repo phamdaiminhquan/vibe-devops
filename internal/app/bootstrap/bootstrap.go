@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -38,8 +39,15 @@ func Initialize(ctx context.Context) (*ApplicationContext, error) {
 		return nil, fmt.Errorf("could not load configuration from .vibe.yaml. Please run 'vibe init' first. Error: %w", err)
 	}
 
-	// 2. Setup Logger (placeholder for now, can be configured later)
-	logger := slog.Default()
+	// 2. Setup Logger - use quiet logger for clean CLI output
+	// Set VIBE_DEBUG=1 to enable debug logging
+	var logger *slog.Logger
+	if os.Getenv("VIBE_DEBUG") == "1" {
+		logger = slog.Default()
+	} else {
+		// Discard all logs for clean CLI output
+		logger = slog.New(slog.NewTextHandler(io.Discard, nil))
+	}
 
 	// 3. Instantiate AI provider
 	var provider ports.Provider
