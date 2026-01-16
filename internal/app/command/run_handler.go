@@ -97,7 +97,13 @@ func (h *RunHandler) checkDependencies(ctx context.Context) {
 
 func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 	// Simple spinner/status
+	var isStreaming bool
+
 	onProgress := func(step agent.StepInfo) {
+		if isStreaming {
+			fmt.Println() // Newline after stream finishes
+			isStreaming = false
+		}
 		switch step.Type {
 		case "thinking":
 			fmt.Printf("\r\033[K[VIBE] ⏳ Thinking... ")
@@ -107,6 +113,15 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 			// Optional: print result preview or just keep quiet to let next thinking overwrite
 			// fmt.Printf("\r\033[K[VIBE] ✅ Completed. \n")
 		}
+	}
+
+	onToken := func(token string) {
+		if !isStreaming {
+			// Clear "Thinking..." line on first token
+			fmt.Printf("\r\033[K")
+			isStreaming = true
+		}
+		fmt.Print(token)
 	}
 
 	var agentTranscript []string
@@ -121,6 +136,10 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 
 	// Tool confirmation callback
 	toolConfirm := func(cmd string) bool {
+		if isStreaming {
+			fmt.Println()
+			isStreaming = false
+		}
 		fmt.Printf("\n[VIBE] Agent wants to run command:\n")
 		fmt.Printf("   \033[1;33m%s\033[0m\n", cmd)
 		fmt.Print("   Allow this one-time execution? (y/N) ")
@@ -143,8 +162,8 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 	contextRegistry := ctxregistry.NewRegistry()
 	contextRegistry.Register(file.NewProvider("."))
 	contextRegistry.Register(git.NewProvider("."))
-	contextRegistry.Register(ctxsystem.NewProvider())
 	contextRegistry.Register(logs.NewProvider("."))
+	contextRegistry.Register(ctxsystem.NewProvider())
 
 	ag := agent.NewService(h.Ctx.Provider, tools, h.Ctx.Logger, h.Flags.AgentMaxSteps).
 		WithContextRegistry(contextRegistry)
@@ -156,6 +175,7 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 			GOOS:        runtime.GOOS,
 			Transcript:  agentTranscript,
 			OnProgress:  onProgress,
+			OnToken:     onToken,
 		})
 
 		fmt.Printf("\r\033[K") // Clear spinner

@@ -42,6 +42,9 @@ type SuggestRequest struct {
 
 	// OnProgress is called when the agent provides intermediate feedback
 	OnProgress func(StepInfo)
+
+	// OnToken is called when a token is generated (streaming)
+	OnToken func(token string)
 }
 
 type StepInfo struct {
@@ -79,15 +82,36 @@ func (s *Service) SuggestCommand(ctx context.Context, req SuggestRequest) (Sugge
 		prompt := buildAgentPrompt(req.GOOS, req.UserRequest, transcript, s.tools, contextItems)
 		s.logger.DebugContext(ctx, "agent generate", "provider", s.provider.Name(), "step", step+1)
 
-		resp, err := s.provider.Generate(ctx, ports.GenerateRequest{Prompt: prompt})
-		if err != nil {
-			s.logger.ErrorContext(ctx, "agent generate failed", "error", err, "step", step+1)
-			return SuggestResponse{}, fmt.Errorf("agent generation failed at step %d: %w", step+1, err)
+		var responseText string
+
+		if req.OnToken != nil {
+			var sb strings.Builder
+			streamCh, err := s.provider.StreamGenerate(ctx, ports.GenerateRequest{Prompt: prompt})
+			if err != nil {
+				s.logger.ErrorContext(ctx, "agent stream generate failed", "error", err, "step", step+1)
+				return SuggestResponse{}, fmt.Errorf("agent stream generation failed at step %d: %w", step+1, err)
+			}
+
+			for chunk := range streamCh {
+				if chunk.Error != nil {
+					return SuggestResponse{}, fmt.Errorf("stream error: %w", chunk.Error)
+				}
+				sb.WriteString(chunk.Content)
+				req.OnToken(chunk.Content)
+			}
+			responseText = sb.String()
+		} else {
+			resp, err := s.provider.Generate(ctx, ports.GenerateRequest{Prompt: prompt})
+			if err != nil {
+				s.logger.ErrorContext(ctx, "agent generate failed", "error", err, "step", step+1)
+				return SuggestResponse{}, fmt.Errorf("agent generation failed at step %d: %w", step+1, err)
+			}
+			responseText = resp.Text
 		}
 
-		action, err := ParseAction(resp.Text)
+		action, err := ParseAction(responseText)
 		if err != nil {
-			s.logger.WarnContext(ctx, "agent parse error", "error", err, "response", resp.Text)
+			s.logger.WarnContext(ctx, "agent parse error", "error", err, "response", responseText)
 			return SuggestResponse{}, fmt.Errorf("agent protocol parse error: %w", err)
 		}
 
