@@ -19,6 +19,7 @@ import (
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/agent"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/bootstrap"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/dependency"
+	"github.com/phamdaiminhquan/vibe-devops/internal/app/locale"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/run"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/session"
 	"github.com/phamdaiminhquan/vibe-devops/internal/ports"
@@ -96,6 +97,9 @@ func (h *RunHandler) checkDependencies(ctx context.Context) {
 }
 
 func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
+	// Check Vietnamese font support if user input contains Vietnamese
+	locale.WarnIfVietnameseNotSupported(input)
+
 	// Track streaming state for UI
 	var isStreaming bool
 
@@ -114,10 +118,11 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 		}
 	}
 
-	// Smart streaming: receives only thought/explanation text (not raw JSON)
+	// Smart streaming: receives only explanation text (thought is shown via onProgress)
 	onToken := func(token string) {
 		if !isStreaming {
 			fmt.Printf("\r\033[K") // Clear spinner
+			fmt.Print("[VIBE] ")   // Prefix for explanation
 			isStreaming = true
 		}
 		fmt.Print(token)
@@ -369,7 +374,7 @@ func (h *RunHandler) executeAndHeal(ctx context.Context, cmd string, transcript 
 }
 
 func (h *RunHandler) askConfirmation(cmd string) bool {
-	fmt.Printf("\n✨ Vibe suggests the following command:\n\n")
+	fmt.Printf("\n💡 Vibe want to run command:")
 	fmt.Printf("  \033[1;36m%s\033[0m\n\n", cmd)
 	fmt.Print("Do you want to execute it? (y/N) ")
 

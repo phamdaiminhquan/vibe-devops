@@ -292,11 +292,11 @@ func (s *Service) smartStreamGenerate(ctx context.Context, prompt string, onToke
 		fullBuffer.WriteString(chunk.Content)
 		currentText := fullBuffer.String()
 
-		// Try to find and stream "thought" content
+		// Skip thought streaming - it's already shown via onProgress callback
+		// Only look for thought end to know when to start looking for explanation
 		if !inThought && thoughtStart == -1 {
 			if idx := strings.Index(currentText, `"thought":`); idx != -1 {
-				// Find the opening quote after "thought":
-				afterKey := currentText[idx+10:] // len(`"thought":`) = 10
+				afterKey := currentText[idx+10:]
 				if qIdx := strings.Index(afterKey, `"`); qIdx != -1 {
 					thoughtStart = idx + 10 + qIdx + 1
 					inThought = true
@@ -305,24 +305,12 @@ func (s *Service) smartStreamGenerate(ctx context.Context, prompt string, onToke
 		}
 
 		if inThought && thoughtStart != -1 {
-			// Stream thought content as it comes in
+			// Just track when thought ends, don't stream it
 			subset := currentText[thoughtStart:]
-			// Find closing quote (not escaped)
 			endIdx := findUnescapedQuote(subset)
 			if endIdx != -1 {
-				// Thought complete
-				thoughtContent := subset[:endIdx]
-				if len(thoughtContent) > lastStreamedLen {
-					onToken(thoughtContent[lastStreamedLen:])
-				}
 				inThought = false
-				lastStreamedLen = 0
-			} else {
-				// Still streaming thought
-				if len(subset) > lastStreamedLen {
-					onToken(subset[lastStreamedLen:])
-					lastStreamedLen = len(subset)
-				}
+				// Reset for explanation
 			}
 		}
 

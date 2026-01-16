@@ -6,7 +6,8 @@ An open-source AI terminal agent for automated DevOps tasks.
 
 - **Natural Language to Shell**: Convert plain English requests into executable shell commands.
 - **Multi-Provider AI**: Choose your AI brain - Gemini, OpenAI (GPT-4o), or Ollama (local/offline).
-- **Streaming Output**: Real-time token-by-token response display for a smooth experience.
+- **Smart Streaming**: Real-time streaming of AI explanations with clean output (no raw JSON).
+- **Vietnamese Support**: Auto-detects Vietnamese input and warns if fonts are missing on Linux.
 - **Context Providers**: Use `@file`, `@git`, `@system`, `@logs` to inject context into your requests.
 - **Safety First**: Shows every command for confirmation before execution.
 - **Smart Session**: Remembers context across runs with metadata (time, status) and simple context management.
