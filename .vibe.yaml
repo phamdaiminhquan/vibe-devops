@@ -1,5 +1,0 @@
-ai:
-    provider: gemini
-    gemini:
-        apiKey: AIzaSyDci0zhbHx6l_Nv3GC6bXqWUPawhLP3wew
-        model: gemini-3-flash-preview
