@@ -259,8 +259,9 @@ func (h *RunHandler) executeAndHeal(ctx context.Context, cmd string, transcript 
 		}
 	}
 
-	// Self-Heal Check
-	shouldSelfHeal := h.Flags.AgentMode && h.Flags.SelfHeal && (looksLikeDiagnosticQuestion(originalRequest) || err != nil || res.ExitCode != 0)
+	// Always send output to AI for analysis when in agent mode with self-heal
+	// This ensures user gets AI interpretation of results, not just "success"
+	shouldSelfHeal := h.Flags.AgentMode && h.Flags.SelfHeal
 
 	if !shouldSelfHeal {
 		// Persist simple run
