@@ -5,11 +5,13 @@ An open-source AI terminal agent for automated DevOps tasks.
 ## Features
 
 - **Natural Language to Shell**: Convert plain English requests into executable shell commands.
-- **AI-Powered**: Uses providers like Gemini to generate commands.
+- **Multi-Provider AI**: Choose your AI brain - Gemini, OpenAI (GPT-4o), or Ollama (local/offline).
+- **Streaming Output**: Real-time token-by-token response display for a smooth experience.
+- **Context Providers**: Use `@file`, `@git`, `@system`, `@logs` to inject context into your requests.
 - **Safety First**: Shows every command for confirmation before execution.
 - **Smart Session**: Remembers context across runs with metadata (time, status) and simple context management.
 - **Dependency Auto-Check**: Proactively warns if essential tools (Docker, Git) are missing.
-- **Extensible**: Hexagonal Architecture with pluggable AI providers.
+- **Extensible**: Hexagonal Architecture with pluggable AI providers and tools.
 - **Cross-Platform**: Works on Linux, macOS, and Windows.
 
 ## Installation
@@ -88,7 +90,25 @@ To disable self-heal:
 vibe --self-heal=false "explain why service X is not running"
 ```
 
-### 4. Switch Models
+### 4. Use Context Providers
+
+Inject relevant context directly into your request using `@mentions`:
+
+```bash
+# Include file content
+vibe "@file main.go fix the bug on line 42" --agent
+
+# Include git status
+vibe "@git status commit these changes" --agent
+
+# Include system info
+vibe "@system os install docker" --agent
+
+# Include log analysis (auto-highlights errors)
+vibe "@logs app.log:100 what's wrong?" --agent
+```
+
+### 5. Switch Models
 
 To switch the configured model later:
 
