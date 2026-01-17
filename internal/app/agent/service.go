@@ -74,6 +74,18 @@ func (s *Service) SuggestCommand(ctx context.Context, req SuggestRequest) (Sugge
 	s.logger.InfoContext(ctx, "agent start", "request", req.UserRequest, "max_steps", s.maxSteps, "context_items", len(contextItems))
 
 	for step := 0; step < s.maxSteps; step++ {
+		// Check for cancellation (Ctrl+C)
+		select {
+		case <-ctx.Done():
+			s.logger.InfoContext(ctx, "agent cancelled by user", "step", step)
+			return SuggestResponse{
+				Explanation: "⚠️ Cancelled by user.",
+				Transcript:  transcript,
+			}, ctx.Err()
+		default:
+			// Continue processing
+		}
+
 		// Callback: Thinking
 		if req.OnProgress != nil {
 			req.OnProgress(StepInfo{Step: step + 1, Type: "thinking", Message: "Analyzing request..."})
