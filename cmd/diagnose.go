@@ -34,7 +34,7 @@ var diagnoseCmd = &cobra.Command{
 		fmt.Print(diagnose.FormatReport(result))
 
 		// AI Analysis if requested
-		if diagnoseWithAI && (len(result.Warnings) > 0 || len(result.Errors) > 0) {
+		if diagnoseWithAI {
 			analyzeWithAI(ctx, result)
 		}
 	},
@@ -53,7 +53,7 @@ func analyzeWithAI(ctx context.Context, result *diagnose.DiagnoseResult) {
 
 	// Build prompt with diagnostics data
 	var sb strings.Builder
-	sb.WriteString("Analyze the following system diagnostics and suggest fixes:\n\n")
+	sb.WriteString("Analyze the following system diagnostics and provide a summary:\n\n")
 
 	if len(result.Errors) > 0 {
 		sb.WriteString("CRITICAL ERRORS:\n")
@@ -69,18 +69,29 @@ func analyzeWithAI(ctx context.Context, result *diagnose.DiagnoseResult) {
 		}
 	}
 
-	sb.WriteString("\nPlease analyze root causes and suggest specific remediation steps.")
+	if len(result.OK) > 0 {
+		sb.WriteString("\nHEALTHY CHECKS:\n")
+		for _, check := range result.OK {
+			sb.WriteString(fmt.Sprintf("- %s: %s\n", check.Description, check.Value))
+		}
+	}
+
+	if len(result.Errors) == 0 && len(result.Warnings) == 0 {
+		sb.WriteString("\nThe system appears healthy. Please confirm this assessment and provide any optimization recommendations.")
+	} else {
+		sb.WriteString("\nPlease analyze root causes and suggest specific remediation steps.")
+	}
 
 	// Generate AI response
 	resp, err := appCtx.Provider.Generate(ctx, ports.GenerateRequest{
 		Prompt: sb.String(),
 	})
 	if err != nil {
-		fmt.Printf("⚠️  AI Error: %v\n", err)
+		fmt.Printf("⚠️ AI Error: %v\n", err)
 		return
 	}
 
-	fmt.Println("\nAI Analysis:")
+	fmt.Println("\nVibe Agent Analysis:")
 	fmt.Println("─────────────────")
 	fmt.Println(resp.Text)
 }
