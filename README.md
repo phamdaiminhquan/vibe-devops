@@ -7,6 +7,7 @@ An open-source AI terminal agent for automated DevOps tasks.
 - **Natural Language to Shell**: Convert plain English requests into executable shell commands.
 - **Multi-Provider AI**: Choose your AI brain - Gemini, OpenAI (GPT-4o), or Ollama (local/offline).
 - **Smart Streaming**: Real-time streaming of AI explanations with clean output (no raw JSON).
+- **System Diagnostics**: `vibe diagnose` checks disk, RAM, Docker, network, services with AI analysis (`--ai` flag).
 - **Vietnamese Support**: Auto-detects Vietnamese input and warns if fonts are missing on Linux.
 - **Context Providers**: Use `@file`, `@git`, `@system`, `@logs` to inject context into your requests.
 - **Safety First**: Shows every command for confirmation before execution.
@@ -109,7 +110,19 @@ vibe "@system os install docker" --agent
 vibe "@logs app.log:100 what's wrong?" --agent
 ```
 
-### 5. Switch Models
+### 5. System Diagnostics
+
+Run comprehensive health checks on your system:
+
+```bash
+# Basic diagnostics (disk, RAM, Docker, network, services)
+vibe diagnose
+
+# With AI analysis for issues
+vibe diagnose --ai
+```
+
+### 6. Switch Models
 
 To switch the configured model later:
 
