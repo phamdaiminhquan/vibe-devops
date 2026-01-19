@@ -19,6 +19,7 @@ import (
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/agent"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/bootstrap"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/dependency"
+	vibegit "github.com/phamdaiminhquan/vibe-devops/internal/app/git"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/locale"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/run"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/session"
@@ -100,6 +101,16 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 	// Check Vietnamese font support if user input contains Vietnamese
 	locale.WarnIfVietnameseNotSupported(input)
 
+	// Auto-checkpoint: save uncommitted changes before AI session
+	workDir, _ := os.Getwd()
+	if vibegit.IsGitRepo(workDir) && vibegit.HasUncommittedChanges(workDir) {
+		fileCount := vibegit.CountUncommittedFiles(workDir)
+		fmt.Printf("[VIBE] Creating checkpoint... (%d uncommitted files)\n", fileCount)
+		if hash, err := vibegit.CreateCheckpoint(workDir); err == nil {
+			fmt.Printf("[VIBE] Checkpoint created: %s (use 'vibe undo' to restore)\n", hash)
+		}
+	}
+
 	// Track streaming state for UI
 	var isStreaming bool
 
@@ -110,9 +121,9 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 		}
 		switch step.Type {
 		case "thinking":
-			fmt.Printf("\r\033[K[VIBE] ⏳ Thinking... ")
+			fmt.Printf("\r\033[K[VIBE] Thinking... ")
 		case "tool_call":
-			fmt.Printf("\r\033[K[VIBE] 🛠  %s\n", step.Message)
+			fmt.Printf("\r\033[K[VIBE] %s\n", step.Message)
 		case "tool_done":
 			// Keep quiet to let next action overwrite
 		}
@@ -203,7 +214,7 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 			// Normal error handling
 			errMsg := err.Error()
 			if strings.Contains(errMsg, "API key not valid") || strings.Contains(errMsg, "API_KEY_INVALID") {
-				fmt.Println("\n❌ Error: Invalid AI Provider API Key.")
+				fmt.Println("\nError: Invalid AI Provider API Key.")
 				fmt.Println("👉 To fix this, run:")
 				fmt.Println("   vibe config api-key \"YOUR_API_KEY\"")
 				return fmt.Errorf("check your API key")
@@ -211,9 +222,13 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 			return fmt.Errorf("AI completion failed: %w", err)
 		}
 
-		if strings.TrimSpace(resp.Explanation) != "" {
+		// Only print explanation if NOT already streamed (isStreaming tracks if onToken was used)
+		if strings.TrimSpace(resp.Explanation) != "" && !isStreaming {
 			fmt.Printf("\r\033[K") // Clear spinner
 			fmt.Printf("\n[VIBE] %s\n", resp.Explanation)
+		} else if isStreaming {
+			fmt.Println() // Just add newline after stream
+			isStreaming = false
 		}
 
 		// Skip command execution if no command suggested (type=answer scenario)
@@ -227,8 +242,8 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 
 func (h *RunHandler) runSingleShotMode(ctx context.Context, input string) error {
 	runner := run.NewService(h.Ctx.Provider, h.Ctx.Logger)
-	fmt.Println("🤖 Calling AI to generate command...")
-	fmt.Println("ℹ️  Note: Vibe single-shot mode.")
+	fmt.Println("Calling AI to generate command...")
+	fmt.Println("Note: Vibe single-shot mode.")
 
 	cmd, err := runner.SuggestCommand(ctx, run.SuggestRequest{UserRequest: input, GOOS: runtime.GOOS})
 	if err != nil {
@@ -259,9 +274,9 @@ func (h *RunHandler) executeAndHeal(ctx context.Context, cmd string, transcript 
 
 	// Output Feedback
 	if err == nil && res.ExitCode == 0 {
-		fmt.Println("\n✅ Command executed successfully.")
+		fmt.Println("\nCommand executed successfully.")
 	} else {
-		fmt.Printf("\n❌ Command failed (exit code %d).\n", res.ExitCode)
+		fmt.Printf("\nCommand failed (exit code %d).\n", res.ExitCode)
 		if stderrBuf.Len() > 0 {
 			fmt.Println("\n--- stderr ---")
 			fmt.Println(stderrBuf.String())
