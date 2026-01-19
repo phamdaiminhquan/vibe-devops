@@ -79,44 +79,99 @@ func (p *Provider) GetContextItems(ctx context.Context, query string, extras por
 		return nil, err
 	}
 
-	// Analyze for errors
-	var issues []string
-	for i, line := range lines {
-		for _, pattern := range errorPatterns {
-			if pattern.MatchString(line) {
-				issues = append(issues, fmt.Sprintf("Line %d: %s", i+1, strings.TrimSpace(line)))
-				break
-			}
+	// Detect log format from first non-empty line
+	logFormat := FormatPlain
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			logFormat = DetectFormat(line)
+			break
 		}
 	}
+
+	// Analyze for issues using new highlighter
+	issues := AnalyzeLines(lines)
+	levelCounts := CountByLevel(lines)
 
 	// Build content
 	var content strings.Builder
 	content.WriteString(fmt.Sprintf("=== Log File: %s (last %d lines) ===\n\n", filePath, len(lines)))
 
-	// Show detected issues first
+	// Show summary
+	content.WriteString("Summary:\n")
+	for _, level := range []LogLevel{LevelFatal, LevelError, LevelWarn, LevelInfo} {
+		if count := levelCounts[level]; count > 0 {
+			content.WriteString(fmt.Sprintf("  • %s: %d\n", LevelString(level), count))
+		}
+	}
+	content.WriteString("\n")
+
+	// Show detected issues
 	if len(issues) > 0 {
 		content.WriteString("⚠️ DETECTED ISSUES:\n")
+
+		// Group by category
+		issuesByCategory := make(map[string][]DetectedIssue)
 		for _, issue := range issues {
-			if len(issue) > 200 {
-				issue = issue[:200] + "..."
+			issuesByCategory[issue.Category] = append(issuesByCategory[issue.Category], issue)
+		}
+
+		for category, catIssues := range issuesByCategory {
+			content.WriteString(fmt.Sprintf("\n  [%s] (%d)\n", category, len(catIssues)))
+			for _, issue := range catIssues {
+				if len(catIssues) <= 5 {
+					content.WriteString(fmt.Sprintf("    Line %d: %s\n", issue.Line, issue.Content))
+				}
 			}
-			content.WriteString("  • " + issue + "\n")
+			if len(catIssues) > 5 {
+				content.WriteString(fmt.Sprintf("    ... and %d more\n", len(catIssues)-5))
+			}
 		}
 		content.WriteString("\n")
 	} else {
 		content.WriteString("✅ No obvious errors detected in log snippet.\n\n")
 	}
 
+	// Log content with highlighting
 	content.WriteString("=== Log Content ===\n")
+
 	for i, line := range lines {
-		content.WriteString(fmt.Sprintf("%4d: %s\n", i+1, line))
+		lineNum := fmt.Sprintf("%4d: ", i+1)
+
+		// Format based on detected format
+		switch logFormat {
+		case FormatJSON:
+			if entry, err := ParseJSONLine(line); err == nil {
+				content.WriteString(lineNum + FormatParsedEntry(entry, false) + "\n")
+			} else {
+				content.WriteString(lineNum + line + "\n")
+			}
+		case FormatLogfmt:
+			entry := ParseLogfmtLine(line)
+			content.WriteString(lineNum + FormatParsedEntry(entry, false) + "\n")
+		default:
+			// Plain text - just show with level indicator
+			level := DetectLevel(line)
+			if level == LevelError || level == LevelFatal {
+				content.WriteString(lineNum + "❌ " + line + "\n")
+			} else if level == LevelWarn {
+				content.WriteString(lineNum + "⚠️ " + line + "\n")
+			} else {
+				content.WriteString(lineNum + line + "\n")
+			}
+		}
+	}
+
+	formatName := "plain"
+	if logFormat == FormatJSON {
+		formatName = "JSON"
+	} else if logFormat == FormatLogfmt {
+		formatName = "logfmt"
 	}
 
 	return []ports.ContextItem{
 		{
 			Name:        filepath.Base(filePath),
-			Description: fmt.Sprintf("Log analysis: %d lines, %d issues detected", len(lines), len(issues)),
+			Description: fmt.Sprintf("Log analysis: %d lines, %d issues, format: %s", len(lines), len(issues), formatName),
 			Content:     content.String(),
 			URI:         "file://" + absPath,
 		},
