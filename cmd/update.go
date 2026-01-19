@@ -14,7 +14,7 @@ var updateCmd = &cobra.Command{
 	Short: "Update vibe to the latest version",
 	Long:  `Updates vibe to the latest version available on GitHub Releases by running the installation script.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("🚀 Starting update process...")
+		fmt.Println("Starting update process...")
 
 		installScript := "https://raw.githubusercontent.com/phamdaiminhquan/vibe-devops/main/install.sh"
 		// Use curl to fetch the script and pipe it to sh

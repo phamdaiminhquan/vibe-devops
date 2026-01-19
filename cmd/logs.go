@@ -106,11 +106,11 @@ func displayLogs(lines []string, format logs.LogFormat, useColor bool) {
 	levelCounts := logs.CountByLevel(lines)
 
 	// Header
-	fmt.Println("\n📄 Log Analysis")
+	fmt.Println("\nLog Analysis")
 	fmt.Println("═══════════════════════════════════════")
 
 	// Summary
-	fmt.Println("\n📊 Summary:")
+	fmt.Println("\nSummary:")
 	for _, level := range []logs.LogLevel{logs.LevelFatal, logs.LevelError, logs.LevelWarn, logs.LevelInfo} {
 		if count := levelCounts[level]; count > 0 {
 			fmt.Printf("  • %s: %d\n", logs.LevelString(level), count)
@@ -129,7 +129,7 @@ func displayLogs(lines []string, format logs.LogFormat, useColor bool) {
 	}
 
 	// Log content
-	fmt.Printf("\n📃 Content (%d lines):\n", len(lines))
+	fmt.Printf("\nContent (%d lines):\n", len(lines))
 	fmt.Println("───────────────────────────────────────")
 
 	for i, line := range lines {
@@ -176,12 +176,12 @@ func displayErrorsOnly(lines []string, useColor bool) {
 	if count == 0 {
 		fmt.Println("✅ No errors or warnings found")
 	} else {
-		fmt.Printf("\n📊 Total: %d issues\n", count)
+		fmt.Printf("\nTotal: %d issues\n", count)
 	}
 }
 
 func displayJSONLogs(lines []string, useColor bool) {
-	fmt.Println("\n📋 JSON Logs (pretty-print)")
+	fmt.Println("\nJSON Logs (pretty-print)")
 	fmt.Println("═══════════════════════════════════════")
 
 	for i, line := range lines {
@@ -191,7 +191,7 @@ func displayJSONLogs(lines []string, useColor bool) {
 }
 
 func analyzeLogsWithAI(ctx context.Context, lines []string, filePath string) {
-	fmt.Println("\n🤖 Analyzing with AI...")
+	fmt.Println("\n🧠 Analyzing with AI...")
 
 	// Initialize provider
 	appCtx, err := bootstrap.Initialize(ctx)
@@ -242,7 +242,7 @@ func analyzeLogsWithAI(ctx context.Context, lines []string, filePath string) {
 		return
 	}
 
-	fmt.Println("\n📋 AI Analysis:")
+	fmt.Println("\n🧠 AI Analysis:")
 	fmt.Println("─────────────────")
 	fmt.Println(resp.Text)
 }

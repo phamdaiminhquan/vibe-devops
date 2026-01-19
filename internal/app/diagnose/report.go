@@ -52,7 +52,7 @@ func FormatReport(result *DiagnoseResult) string {
 	// Suggested fixes
 	fixes := collectFixes(result)
 	if len(fixes) > 0 {
-		sb.WriteString(fmt.Sprintf("%s💡 Suggestions:%s\n", colorBold, colorReset))
+		sb.WriteString(fmt.Sprintf("%sSuggestions:%s\n", colorBold, colorReset))
 		for i, fix := range fixes {
 			sb.WriteString(fmt.Sprintf("  %d. %s\n", i+1, fix))
 		}

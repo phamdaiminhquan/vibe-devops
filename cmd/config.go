@@ -68,7 +68,7 @@ var setApiKeyCmd = &cobra.Command{
 				return fmt.Errorf("failed to write updated config: %w", err)
 			}
 
-			fmt.Println("🔄 Validating API key and fetching available models...")
+			fmt.Println("Validating API key and fetching available models...")
 			models, err := ai.GetGeminiModels(apiKey)
 			if err != nil {
 				return fmt.Errorf("failed to validate API key: %w", err)

@@ -22,6 +22,7 @@ import (
 	vibegit "github.com/phamdaiminhquan/vibe-devops/internal/app/git"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/locale"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/run"
+	"github.com/phamdaiminhquan/vibe-devops/internal/app/safety"
 	"github.com/phamdaiminhquan/vibe-devops/internal/app/session"
 	"github.com/phamdaiminhquan/vibe-devops/internal/ports"
 )
@@ -205,7 +206,7 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 				reader := bufio.NewReader(os.Stdin)
 				in, _ := reader.ReadString('\n')
 				if strings.ToLower(strings.TrimSpace(in)) == "y" {
-					fmt.Println("🔄 Extending session...")
+					fmt.Println("Extending session...")
 					agentTranscript = resp.Transcript // Resume from where we left off
 					continue
 				}
@@ -254,9 +255,28 @@ func (h *RunHandler) runSingleShotMode(ctx context.Context, input string) error 
 }
 
 func (h *RunHandler) executeAndHeal(ctx context.Context, cmd string, transcript []string, originalRequest string) error {
-	// Auto-Confirmation for safe read-only commands
-	if isSafeCommand(cmd) {
-		fmt.Printf("\n✨ Vibe auto-executing safe command:\n  \033[1;36m%s\033[0m\n", cmd)
+	// Safety check for dangerous commands
+	safetyResult := safety.CheckCommand(cmd)
+	if safetyResult.Level >= safety.Warning {
+		action, doBackup := safety.PromptBackupChoice(cmd, safetyResult)
+		if action == "cancel" {
+			fmt.Println("❌ Command cancelled.")
+			return nil
+		}
+		if doBackup {
+			paths := safety.ExtractPaths(cmd)
+			if len(paths) > 0 {
+				fmt.Println("Creating backup...")
+				if backupPath, err := safety.CreateBackup(cmd, paths); err == nil {
+					fmt.Printf("✅ Backup created: %s\n", backupPath)
+				} else {
+					fmt.Printf("⚠️ Backup failed: %v\n", err)
+				}
+			}
+		}
+	} else if isSafeCommand(cmd) {
+		// Auto-Confirmation for safe read-only commands
+		fmt.Printf("\n✅ Vibe auto-executing safe command:\n  \033[1;36m%s\033[0m\n", cmd)
 	} else {
 		// Ask for confirmation for others
 		if !h.askConfirmation(cmd) {
@@ -265,7 +285,7 @@ func (h *RunHandler) executeAndHeal(ctx context.Context, cmd string, transcript 
 	}
 
 	// Initial Execution
-	fmt.Println("🚀 Executing command...")
+	fmt.Println("Executing command...")
 	exec := local.NewForOS(runtime.GOOS)
 	var stdoutBuf, stderrBuf strings.Builder
 	spec := ports.ExecSpec{Command: cmd, Stdout: &stdoutBuf, Stderr: &stderrBuf}
@@ -349,7 +369,7 @@ func (h *RunHandler) executeAndHeal(ctx context.Context, cmd string, transcript 
 		}
 
 		// Execute again
-		fmt.Println("🚀 Executing command...")
+		fmt.Println("Executing command...")
 		stdoutBuf.Reset()
 		stderrBuf.Reset()
 		spec := ports.ExecSpec{Command: resp.Command, Stdout: &stdoutBuf, Stderr: &stderrBuf}
@@ -389,7 +409,7 @@ func (h *RunHandler) executeAndHeal(ctx context.Context, cmd string, transcript 
 }
 
 func (h *RunHandler) askConfirmation(cmd string) bool {
-	fmt.Printf("\n💡 Vibe want to run command:")
+	fmt.Printf("\nVibe want to run command:")
 	fmt.Printf("  \033[1;36m%s\033[0m\n\n", cmd)
 	fmt.Print("Do you want to execute it? (y/N) ")
 

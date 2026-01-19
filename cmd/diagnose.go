@@ -41,7 +41,7 @@ var diagnoseCmd = &cobra.Command{
 }
 
 func analyzeWithAI(ctx context.Context, result *diagnose.DiagnoseResult) {
-	fmt.Println("\n🤖 Analyzing with AI...")
+	fmt.Println("\n🧠 Analyzing with AI...")
 
 	// Initialize provider
 	appCtx, err := bootstrap.Initialize(ctx)
