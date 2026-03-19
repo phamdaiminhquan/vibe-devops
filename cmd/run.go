@@ -21,6 +21,7 @@ var runResumeSession bool
 var runNoSession bool
 var runContextBudget int
 var runContextRecentLines int
+var runNoStream bool
 
 var runCmd = &cobra.Command{
 	Use:   "run [natural language request]",
@@ -45,6 +46,7 @@ func init() {
 	runCmd.Flags().BoolVar(&runNoSession, "no-session", false, "Disable session persistence (agent mode)")
 	runCmd.Flags().IntVar(&runContextBudget, "context-budget", 8000, "Approx char budget for session context tail")
 	runCmd.Flags().IntVar(&runContextRecentLines, "context-recent-lines", 40, "Max recent transcript lines to keep in session memory")
+	runCmd.Flags().BoolVar(&runNoStream, "no-stream", false, "Disable streaming output (use non-streaming mode)")
 }
 
 func runCommand(cmd *cobra.Command, args []string) error {
@@ -76,6 +78,7 @@ func runCommand(cmd *cobra.Command, args []string) error {
 		AgentMaxSteps:       runAgentMaxSteps,
 		SelfHeal:            runSelfHeal,
 		SelfHealMaxAttempts: runSelfHealMaxAttempts,
+		NoStream:            runNoStream,
 	}
 	handler := command.NewRunHandler(appCtx, sessionSvc, flags)
 

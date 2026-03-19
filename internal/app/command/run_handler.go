@@ -33,6 +33,7 @@ type RunFlags struct {
 	AgentMaxSteps       int
 	SelfHeal            bool
 	SelfHealMaxAttempts int
+	NoStream            bool
 }
 
 // RunHandler encapsulates the logic for the 'run' command
@@ -131,13 +132,16 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 	}
 
 	// Smart streaming: receives only explanation text (thought is shown via onProgress)
-	onToken := func(token string) {
-		if !isStreaming {
-			fmt.Printf("\r\033[K") // Clear spinner
-			fmt.Print("[VIBE] ")   // Prefix for explanation
-			isStreaming = true
+	var onToken func(string)
+	if !h.Flags.NoStream {
+		onToken = func(token string) {
+			if !isStreaming {
+				fmt.Printf("\r\033[K") // Clear spinner
+				fmt.Print("[VIBE] ")   // Prefix for explanation
+				isStreaming = true
+			}
+			fmt.Print(token)
 		}
-		fmt.Print(token)
 	}
 
 	var agentTranscript []string
@@ -194,7 +198,9 @@ func (h *RunHandler) runAgentMode(ctx context.Context, input string) error {
 			OnToken:     onToken,
 		})
 
-		fmt.Printf("\r\033[K") // Clear spinner
+		if !isStreaming {
+			fmt.Printf("\r\033[K") // Clear spinner only when not streaming
+		}
 
 		if err != nil {
 			// Check for max steps error
