@@ -104,6 +104,13 @@ func (p *Provider) StreamGenerate(ctx context.Context, req ports.GenerateRequest
 		defer close(ch)
 
 		err := p.client.Chat(ctx, reqChat, func(resp api.ChatResponse) error {
+			// Check for cancellation before sending chunk
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			default:
+			}
+
 			if resp.Message.Content != "" {
 				ch <- ports.StreamChunk{Content: resp.Message.Content}
 			}

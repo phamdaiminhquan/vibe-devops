@@ -108,6 +108,14 @@ func (p *Provider) StreamGenerate(ctx context.Context, req ports.GenerateRequest
 	go func() {
 		defer close(ch)
 		for {
+			// Check for cancellation before blocking on iter.Next()
+			select {
+			case <-ctx.Done():
+				ch <- ports.StreamChunk{Error: ctx.Err()}
+				return
+			default:
+			}
+
 			resp, err := iter.Next()
 			if err != nil {
 				if err == iterator.Done {

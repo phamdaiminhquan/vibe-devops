@@ -298,7 +298,12 @@ func (s *Service) smartStreamGenerate(ctx context.Context, prompt string, onToke
 	for chunk := range streamCh {
 		if chunk.Error != nil {
 			s.logger.ErrorContext(ctx, "smart stream chunk error", "error", chunk.Error)
-			return "" // Signal to use fallback
+			// Don't discard buffered data on error - return what we have so far
+			bufferedText := fullBuffer.String()
+			if bufferedText != "" {
+				return bufferedText
+			}
+			return "" // Only use fallback if nothing was buffered
 		}
 
 		fullBuffer.WriteString(chunk.Content)

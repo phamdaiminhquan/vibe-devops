@@ -7,13 +7,12 @@ An open-source AI terminal agent for automated DevOps tasks.
 - **Natural Language to Shell**: Convert plain English requests into executable shell commands.
 - **Multi-Provider AI**: Choose your AI brain - Gemini, OpenAI (GPT-4o), or Ollama (local/offline).
 - **Smart Streaming**: Real-time streaming of AI explanations with clean output (no raw JSON).
-- **System Diagnostics**: `vibe diagnose` checks disk, RAM, Docker, network, services with AI analysis (`--ai` flag).
-- **Vietnamese Support**: Auto-detects Vietnamese input and warns if fonts are missing on Linux.
+- **System Diagnostics**: `vibe diagnose` checks disk, RAM, Docker, network, services with AI analysis.
+- **Log Analysis**: `vibe logs` with highlighting, JSON parsing, error detection, and AI analysis.
+- **Git Safety Net**: Auto-checkpoint before AI sessions, `vibe undo` to rollback changes.
+- **Dangerous Command Guard**: Block/warn rm -rf, auto-backup before destructive commands.
 - **Context Providers**: Use `@file`, `@git`, `@system`, `@logs` to inject context into your requests.
 - **Safety First**: Shows every command for confirmation before execution.
-- **Smart Session**: Remembers context across runs with metadata (time, status) and simple context management.
-- **Dependency Auto-Check**: Proactively warns if essential tools (Docker, Git) are missing.
-- **Extensible**: Hexagonal Architecture with pluggable AI providers and tools.
 - **Cross-Platform**: Works on Linux, macOS, and Windows.
 
 ## Installation
@@ -122,7 +121,38 @@ vibe diagnose
 vibe diagnose --ai
 ```
 
-### 6. Switch Models
+### 6. Log Analysis
+
+View and analyze log files with highlighting:
+
+```bash
+vibe logs /var/log/nginx/error.log     # View with colors
+vibe logs --tail 50 app.log            # Last 50 lines
+vibe logs --errors app.log             # Errors only
+vibe logs --analyze app.log            # AI analysis
+```
+
+### 7. Git Safety Net
+
+Vibe automatically creates checkpoints before AI sessions:
+
+```bash
+vibe undo              # Interactive: select checkpoint to restore
+vibe undo --last       # Restore last checkpoint
+vibe undo --list       # List all checkpoints
+```
+
+### 8. Restore from Backups
+
+Restore files backed up before dangerous commands:
+
+```bash
+vibe restore           # Interactive restore
+vibe restore --list    # List backups
+vibe restore --cleanup # Remove old backups
+```
+
+### 9. Switch Models
 
 To switch the configured model later:
 
