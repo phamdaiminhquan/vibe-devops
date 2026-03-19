@@ -301,6 +301,7 @@ func (s *Service) smartStreamGenerate(ctx context.Context, prompt string, onToke
 			// Don't discard buffered data on error - return what we have so far
 			bufferedText := fullBuffer.String()
 			if bufferedText != "" {
+				s.logger.InfoContext(ctx, "returning buffered data on stream error", "len", len(bufferedText), "preview", truncate(bufferedText, 100))
 				return bufferedText
 			}
 			return "" // Only use fallback if nothing was buffered
@@ -367,7 +368,17 @@ func (s *Service) smartStreamGenerate(ctx context.Context, prompt string, onToke
 		}
 	}
 
-	return fullBuffer.String()
+	finalBuffer := fullBuffer.String()
+	if !inExplanation && explanationStart == -1 {
+		// Explanation field wasn't found - log it for debugging
+		s.logger.WarnContext(ctx, "smartStreamGenerate: explanation field not found in response",
+			"buffer_len", len(finalBuffer),
+			"has_thought", strings.Contains(finalBuffer, `"thought"`),
+			"has_explanation", strings.Contains(finalBuffer, `"explanation"`),
+			"has_type", strings.Contains(finalBuffer, `"type"`),
+			"preview", truncate(finalBuffer, 200))
+	}
+	return finalBuffer
 }
 
 // findUnescapedQuote finds the first unescaped quote in a string
@@ -393,5 +404,13 @@ func unescapeJSON(s string) string {
 	s = strings.ReplaceAll(s, `\t`, "\t")
 	s = strings.ReplaceAll(s, `\"`, `"`)
 	s = strings.ReplaceAll(s, `\\`, `\`)
+	return s
+}
+
+// truncate returns a truncated string for logging
+func truncate(s string, maxLen int) string {
+	if len(s) > maxLen {
+		return s[:maxLen] + "..."
+	}
 	return s
 }
